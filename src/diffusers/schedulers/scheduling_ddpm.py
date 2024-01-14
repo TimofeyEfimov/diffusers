@@ -426,6 +426,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 tuple is returned where the first element is the sample tensor.
 
         """
+
+        print("I AM HERE")
         t = timestep
 
         prev_t = self.previous_timestep(t)

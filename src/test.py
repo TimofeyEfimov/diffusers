@@ -5,12 +5,12 @@ class TrainingConfig:
     image_size: int = 128  # the generated image resolution
     train_batch_size: int = 16
     eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 50
+    num_epochs: int = 2
     gradient_accumulation_steps: int = 1
     learning_rate: float = 1e-4
     lr_warmup_steps: int = 500
-    save_image_epochs: int = 10
-    save_model_epochs: int = 30
+    save_image_epochs: int = 1
+    save_model_epochs: int = 1
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir: str = "ddpm-butterflies-128"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload the saved model to the HF Hub
@@ -219,6 +219,22 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             accelerator.log(logs, step=global_step)
             global_step += 1
 
+            if accelerator.is_main_process:
+                pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+
+                if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
+                    evaluate(config, epoch, pipeline)
+
+                if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
+                    if config.push_to_hub:
+                        upload_folder(
+                            repo_id=repo_id,
+                            folder_path=config.output_dir,
+                            commit_message=f"Epoch {epoch}",
+                            ignore_patterns=["step_*", "epoch_*"],
+                        )
+                    else:
+                        pipeline.save_pretrained(config.output_dir)
 
 
 print("Hi i am here")

@@ -88,6 +88,7 @@ class DDPMPipeline(DiffusionPipeline):
                 If `return_dict` is `True`, [`~pipelines.ImagePipelineOutput`] is returned, otherwise a `tuple` is
                 returned where the first element is a list with the generated images
         """
+
         # Sample gaussian noise to begin loop
         if isinstance(self.unet.config.sample_size, int):
             image_shape = (
