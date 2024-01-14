@@ -155,6 +155,8 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         log_with="tensorboard",
         project_dir=os.path.join(config.output_dir, "logs"),
     )
+
+    model.to(device)
     if accelerator.is_main_process:
         if config.output_dir is not None:
             os.makedirs(config.output_dir, exist_ok=True)
@@ -170,6 +172,9 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
     model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
         model, optimizer, train_dataloader, lr_scheduler
     )
+
+    model.to(device)
+
     first_param = next(model.parameters()).device
     print("Model is on device:", first_param)
     global_step = 0
@@ -180,16 +185,16 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         progress_bar.set_description(f"Epoch {epoch}")
 
         for step, batch in enumerate(train_dataloader):
-            clean_images = batch["images"]
+            clean_images = batch["images"].to(device)
             # Sample noise to add to the images
-            noise = torch.randn(clean_images.shape, device=clean_images.device)
-            device=clean_images.device
+            noise = torch.randn(clean_images.shape, device=device)
+            
             print("DEVICE IS ", device)
             bs = clean_images.shape[0]
 
             # Sample a random timestep for each image
             timesteps = torch.randint(
-                0, noise_scheduler.config.num_train_timesteps, (bs,), device=clean_images.device,
+                0, noise_scheduler.config.num_train_timesteps, (bs,), device=device,
                 dtype=torch.int64
             )
 
@@ -222,6 +227,7 @@ from accelerate import notebook_launcher
 
 device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
+print(device)
 
 
 train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
