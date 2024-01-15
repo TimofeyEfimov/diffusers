@@ -3,7 +3,7 @@ from dataclasses import dataclass
 @dataclass
 class TrainingConfig:
     image_size: int = 128  # the generated image resolution
-    train_batch_size: int = 16
+    train_batch_size: int = 64
     eval_batch_size: int = 16  # how many images to sample during evaluation
     num_epochs: int = 2
     gradient_accumulation_steps: int = 1
@@ -124,6 +124,7 @@ from diffusers.pipelines.ddpm.pipeline_ddpm import DDPMPipeline
 from diffusers.utils import make_image_grid
 import os
 
+
 def evaluate(config, epoch, pipeline):
     # Sample some images from random noise (this is the backward diffusion process).
     # The default pipeline output type is `List[PIL.Image]`
@@ -146,17 +147,19 @@ from tqdm.auto import tqdm
 from pathlib import Path
 import os
 
+
 def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler):
-    device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     #Initialize accelerator and tensorboard logging
     accelerator = Accelerator(
         mixed_precision=config.mixed_precision,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
         log_with="tensorboard",
-        project_dir=os.path.join(config.output_dir, "logs"),
+        project_dir=os.path.join(config.output_dir, "logs")
     )
 
-    model.to(device)
+    # model = torch.nn.DataParallel(model)
+    # model.to(device)
     if accelerator.is_main_process:
         if config.output_dir is not None:
             os.makedirs(config.output_dir, exist_ok=True)
@@ -173,10 +176,17 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         model, optimizer, train_dataloader, lr_scheduler
     )
 
-    model.to(device)
+    # model = torch.nn.DataParallel(model)
+    # model.to(device)
 
     first_param = next(model.parameters()).device
-    print("Model is on device:", first_param)
+    if isinstance(model, torch.nn.DataParallel):
+        print("Model is on multiple GPUs:", model.device_ids)
+    else:
+        print("Model is on single device:", next(model.parameters()).device)
+    # Assuming 'accelerator' is your Accelerator object
+    print("Accel Devices:", accelerator.device_placement)
+
     global_step = 0
 
     # Now you train the model
@@ -241,7 +251,9 @@ print("Hi i am here")
 
 from accelerate import notebook_launcher
 
-device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = torch.nn.DataParallel(model)
 model = model.to(device)
 print(device)
 
@@ -250,3 +262,8 @@ train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_sched
 
 
 print("Hi i am here")
+
+import glob
+
+sample_images = sorted(glob.glob(f"{config.output_dir}/samples/*.png"))
+Image.open(sample_images[-1])

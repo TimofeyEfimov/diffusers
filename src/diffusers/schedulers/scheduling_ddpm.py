@@ -427,7 +427,6 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         """
 
-        print("I AM HERE")
         t = timestep
 
         prev_t = self.previous_timestep(t)
