@@ -4,14 +4,15 @@ from datasets import load_dataset
 @dataclass
 class TrainingConfig:
     image_size: int = 32  # the generated image resolution
-    train_batch_size: int = 1024
+    train_batch_size: int = 256
     eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 2
+    num_epochs: int = 10
     gradient_accumulation_steps: int = 1
+    norm_num_groups = 8
     learning_rate: float = 1e-4
-    lr_warmup_steps: int = 500
-    save_image_epochs: int = 1
-    save_model_epochs: int = 1
+    lr_warmup_steps: int = 0
+    save_image_epochs: int = 5
+    save_model_epochs: int = 5
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir: str = "mnist-model"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload the saved model to the HF Hub
@@ -66,7 +67,7 @@ model = UNet2DModel(
     in_channels=1,  # the number of input channels, 3 for RGB images
     out_channels=1,  # the number of output channels
     layers_per_block=2,  # how many ResNet layers to use per UNet block
-    block_out_channels=(32, 32, 32, 32),  # output channels for each UNet block
+    block_out_channels=(32*4, 64*4, 64*4, 64*4),  # output channels for each UNet block
     down_block_types=(
         "DownBlock2D",  # a regular ResNet downsampling block
         "DownBlock2D",
@@ -189,6 +190,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         progress_bar.set_description(f"Epoch {epoch}")
 
         for step, batch in enumerate(train_dataloader):
+            print('a')
             clean_images = batch["images"].to(device)
             
             #print(clean_images.size())
@@ -207,10 +209,12 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             # Add noise to the clean images according to the noise magnitude at each timestep
             # (this is the forward diffusion process)
             noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
+            #print(noisy_images.size())
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
                 noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
+                #print(noise_pred.size())
                 loss = F.mse_loss(noise_pred, noise)
                 accelerator.backward(loss)
 
@@ -219,28 +223,28 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
                 lr_scheduler.step()
                 optimizer.zero_grad()
 
-            progress_bar.update(1)
-            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
-            progress_bar.set_postfix(**logs)
-            accelerator.log(logs, step=global_step)
-            global_step += 1
+        progress_bar.update(1)
+        logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
+        progress_bar.set_postfix(**logs)
+        accelerator.log(logs, step=global_step)
+        global_step += 1
 
-            if accelerator.is_main_process:
-                pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+        if accelerator.is_main_process:
+            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
 
-                if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
-                    evaluate(config, epoch, pipeline)
+            if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
+                evaluate(config, epoch, pipeline)
 
-                if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
-                    if config.push_to_hub:
-                        upload_folder(
-                            repo_id=repo_id,
-                            folder_path=config.output_dir,
-                            commit_message=f"Epoch {epoch}",
-                            ignore_patterns=["step_*", "epoch_*"],
-                        )
-                    else:
-                        pipeline.save_pretrained(config.output_dir)
+            if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
+                if config.push_to_hub:
+                    upload_folder(
+                        repo_id=repo_id,
+                        folder_path=config.output_dir,
+                        commit_message=f"Epoch {epoch}",
+                        ignore_patterns=["step_*", "epoch_*"],
+                    )
+                else:
+                    pipeline.save_pretrained(config.output_dir)
 
 
 print("Hi i am here")
