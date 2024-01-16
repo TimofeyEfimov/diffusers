@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datasets import load_dataset
+import time
 
 @dataclass
 class TrainingConfig:
@@ -186,12 +187,15 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 
     # Now you train the model
     for epoch in range(config.num_epochs):
+        print(epoch)
+        start_time = time.time() 
         progress_bar = tqdm(total=len(train_dataloader), disable=not accelerator.is_local_main_process)
         progress_bar.set_description(f"Epoch {epoch}")
 
         for step, batch in enumerate(train_dataloader):
-            print('a')
+            
             clean_images = batch["images"].to(device)
+            
             
             #print(clean_images.size())
             # Sample noise to add to the images
@@ -245,7 +249,9 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
                     )
                 else:
                     pipeline.save_pretrained(config.output_dir)
-
+        end_time = time.time() 
+        epoch_duration = end_time - start_time  # Calculate the duration of the epoch
+        print(f"Epoch {epoch} completed in {epoch_duration:.2f} seconds")
 
 print("Hi i am here")
 
