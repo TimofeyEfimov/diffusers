@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 from datasets import load_dataset
 import time
-from diffusers import UNet2DConditionModel
 
 @dataclass
 class TrainingConfig:
-    image_size: int = 32 # the generated image resolution
+    image_size: int = 32  # the generated image resolution
     train_batch_size: int = 256
     eval_batch_size: int = 16  # how many images to sample during evaluation
     num_epochs: int = 10
@@ -16,7 +15,7 @@ class TrainingConfig:
     save_image_epochs: int = 5
     save_model_epochs: int = 5
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir: str = "mnist-model-cond"  # the model name locally and on the HF Hub
+    output_dir: str = "mnist-model"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload the saved model to the HF Hub
     hub_model_id: str = "<your-username>/<my-awesome-model>"  # the name of the repository to create on the HF Hub
     hub_private_repo: bool = False
@@ -51,8 +50,7 @@ preprocess = transforms.Compose(
 
 def transform(examples):
     images = [preprocess(image) for image in examples["image"]]
-    labels = examples["label"]
-    return {"images": images, "labels": labels}
+    return {"images": images}
 
 
 dataset.set_transform(transform)
@@ -61,73 +59,28 @@ import torch
 
 train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
 
-# from datasets import load_dataset
-
-# config.dataset_name = "huggan/smithsonian_butterflies_subset"
-# dataset = load_dataset(config.dataset_name, split="train")
-
-# import matplotlib.pyplot as plt
-
-# fig, axs = plt.subplots(1, 4, figsize=(16, 4))
-# for i, image in enumerate(dataset[:4]["image"]):
-#     axs[i].imshow(image)
-#     axs[i].set_axis_off()
-# fig.show()
-
-# from torchvision import transforms
-
-# preprocess = transforms.Compose(
-#     [
-#         transforms.Resize((config.image_size, config.image_size)),
-#         transforms.RandomHorizontalFlip(),
-#         transforms.ToTensor(),
-#         transforms.Normalize([0.5], [0.5]),
-#     ]
-# )
-
-# def transform(examples):
-#     images = [preprocess(image.convert("RGB")) for image in examples["image"]]
-#     labels = examples["sim_score"]
-#     return {"images": images, "labels": labels}
-
-
-# dataset.set_transform(transform)
-
-# import torch
-
-# train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
-
 
 from diffusers import UNet2DModel
 
-# # Assuming config is defined as in your previous message
-# model = UNet2DModel(
-#     sample_size=config.image_size,  # the target image resolution
-#     in_channels=1,  # the number of input channels, 3 for RGB images
-#     out_channels=1,  # the number of output channels
-#     layers_per_block=2,  # how many ResNet layers to use per UNet block
-#     block_out_channels=(32*4, 64*4, 64*4, 64*4),  # output channels for each UNet block
-#     down_block_types=(
-#         "DownBlock2D",  # a regular ResNet downsampling block
-#         "DownBlock2D",
-#         "AttnDownBlock2D",  # a ResNet block with spatial self-attention
-#         "DownBlock2D",
-#     ),
-#     up_block_types=(
-#         "UpBlock2D",  # a regular ResNet upsampling block
-#         "AttnUpBlock2D",  # a ResNet block with spatial self-attention
-#         "UpBlock2D",
-#         "UpBlock2D",
-#     ),
-# )
-
-model = UNet2DConditionModel(
-    in_channels = 1,
-    out_channels=1,
-    layers_per_block=2, 
-    block_out_channels=(64, 64, 64, 64),
-    cross_attention_dim=1
-      # output channels for each UNet block
+# Assuming config is defined as in your previous message
+model = UNet2DModel(
+    sample_size=config.image_size,  # the target image resolution
+    in_channels=1,  # the number of input channels, 3 for RGB images
+    out_channels=1,  # the number of output channels
+    layers_per_block=2,  # how many ResNet layers to use per UNet block
+    block_out_channels=(32*4, 64*4, 64*4, 64*4),  # output channels for each UNet block
+    down_block_types=(
+        "DownBlock2D",  # a regular ResNet downsampling block
+        "DownBlock2D",
+        "AttnDownBlock2D",  # a ResNet block with spatial self-attention
+        "DownBlock2D",
+    ),
+    up_block_types=(
+        "UpBlock2D",  # a regular ResNet upsampling block
+        "AttnUpBlock2D",  # a ResNet block with spatial self-attention
+        "UpBlock2D",
+        "UpBlock2D",
+    ),
 )
 
 # Sample image from your dataset for testing
@@ -219,7 +172,6 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         model, optimizer, train_dataloader, lr_scheduler
     )
 
-
     # model = torch.nn.DataParallel(model)
     # model.to(device)
 
@@ -243,16 +195,6 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         for step, batch in enumerate(train_dataloader):
             
             clean_images = batch["images"].to(device)
-            labels = batch["labels"].to(device)
-            # print("Labels size is", labels.size())
-            # print("Labels are")
-            labels = labels.unsqueeze(1)
-            labels= labels.repeat(1, 1)
-            #labels = labels.expand(-1, -1, 1280)
-            labels = labels.unsqueeze(1)
-            labels = labels.to(torch.float32)
-            labels = labels.to(device)
-            #print(labels.size())
             
             
             #print(clean_images.size())
@@ -275,10 +217,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
-                # print(noisy_images.size(), timesteps.size(), labels.size())
-                #print(model)
-
-                noise_pred = model(noisy_images, timesteps, labels, return_dict=False)[0]
+                noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
                 #print(noise_pred.size())
                 loss = F.mse_loss(noise_pred, noise)
                 accelerator.backward(loss)
@@ -295,7 +234,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         global_step += 1
 
         if accelerator.is_main_process:
-            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler, cond=labels)
+            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
 
             if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
                 evaluate(config, epoch, pipeline)
@@ -320,7 +259,7 @@ from accelerate import notebook_launcher
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-# model = torch.nn.DataParallel(model)
+model = torch.nn.DataParallel(model)
 model = model.to(device)
 print(device)
 
