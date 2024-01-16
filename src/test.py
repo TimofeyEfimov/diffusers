@@ -103,12 +103,12 @@ noise = torch.randn(sample_image.shape)
 timesteps = torch.LongTensor([50])
 noisy_image = noise_scheduler.add_noise(sample_image, noise, timesteps)
 
-Image.fromarray(((noisy_image.permute(0, 2, 3, 1) + 1.0) * 127.5).type(torch.uint8).numpy()[0])
+# Image.fromarray(((noisy_image.permute(0, 2, 3, 1) + 1.0) * 127.5).type(torch.uint8).numpy()[0])
 
 import torch.nn.functional as F
 
-noise_pred = model(noisy_image, timesteps).sample
-loss = F.mse_loss(noise_pred, noise)
+# noise_pred = model(noisy_image, timesteps).sample
+# loss = F.mse_loss(noise_pred, noise)
 
 
 from diffusers.optimization import get_cosine_schedule_with_warmup

@@ -1,19 +1,18 @@
 from dataclasses import dataclass
-from datasets import load_dataset
 
 @dataclass
 class TrainingConfig:
-    image_size: int = 32  # the generated image resolution
-    train_batch_size: int = 1024
+    image_size: int = 128  # the generated image resolution
+    train_batch_size: int = 16
     eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 2
+    num_epochs: int = 3
     gradient_accumulation_steps: int = 1
     learning_rate: float = 1e-4
     lr_warmup_steps: int = 500
-    save_image_epochs: int = 1
-    save_model_epochs: int = 1
+    save_image_epochs: int = 2
+    save_model_epochs: int = 2
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir: str = "mnist-model"  # the model name locally and on the HF Hub
+    output_dir: str = "cond"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload the saved model to the HF Hub
     hub_model_id: str = "<your-username>/<my-awesome-model>"  # the name of the repository to create on the HF Hub
     hub_private_repo: bool = False
@@ -25,8 +24,10 @@ config = TrainingConfig()
 
 print(config)
 
+from datasets import load_dataset
 
-dataset = load_dataset('mnist', split='train')
+config.dataset_name = "huggan/smithsonian_butterflies_subset"
+dataset = load_dataset(config.dataset_name, split="train")
 
 import matplotlib.pyplot as plt
 
@@ -41,13 +42,14 @@ from torchvision import transforms
 preprocess = transforms.Compose(
     [
         transforms.Resize((config.image_size, config.image_size)),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize([0.5], [0.5]),
     ]
 )
 
 def transform(examples):
-    images = [preprocess(image) for image in examples["image"]]
+    images = [preprocess(image.convert("RGB")) for image in examples["image"]]
     return {"images": images}
 
 
@@ -58,28 +60,16 @@ import torch
 train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
 
 
-from diffusers import UNet2DModel
+from diffusers import UNet2DConditionModel
 
 # Assuming config is defined as in your previous message
-model = UNet2DModel(
+model = UNet2DConditionModel(
     sample_size=config.image_size,  # the target image resolution
-    in_channels=1,  # the number of input channels, 3 for RGB images
-    out_channels=1,  # the number of output channels
-    layers_per_block=2,  # how many ResNet layers to use per UNet block
-    block_out_channels=(32, 32, 32, 32),  # output channels for each UNet block
-    down_block_types=(
-        "DownBlock2D",  # a regular ResNet downsampling block
-        "DownBlock2D",
-        "AttnDownBlock2D",  # a ResNet block with spatial self-attention
-        "DownBlock2D",
-    ),
-    up_block_types=(
-        "UpBlock2D",  # a regular ResNet upsampling block
-        "AttnUpBlock2D",  # a ResNet block with spatial self-attention
-        "UpBlock2D",
-        "UpBlock2D",
-    ),
+    in_channels=3,  # the number of input channels, 3 for RGB images
+    out_channels=3,
+    block_out_channels=(128, 128, 256, 256)  # the number of output channels
 )
+   
 
 # Sample image from your dataset for testing
 # Assuming dataset is defined and has the required structure
@@ -122,6 +112,7 @@ import os
 def evaluate(config, epoch, pipeline):
     # Sample some images from random noise (this is the backward diffusion process).
     # The default pipeline output type is `List[PIL.Image]`
+    
     images = pipeline(
         batch_size=config.eval_batch_size,
         generator=torch.manual_seed(config.seed),
@@ -190,8 +181,6 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 
         for step, batch in enumerate(train_dataloader):
             clean_images = batch["images"].to(device)
-            
-            #print(clean_images.size())
             # Sample noise to add to the images
             noise = torch.randn(clean_images.shape, device=device)
             
@@ -210,7 +199,14 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
-                noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
+                cond = torch.randint(0, 2, (16, 1, 1280))
+                cond = cond.to(torch.float32)
+
+                # for entry in noisy_images:
+                #     print("Data type of entry:", entry.dtype)
+
+                print(noisy_images.size(), timesteps.size(), cond.size())
+                noise_pred = model(noisy_images, timesteps, cond, return_dict=False)[0]
                 loss = F.mse_loss(noise_pred, noise)
                 accelerator.backward(loss)
 
