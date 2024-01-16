@@ -5,7 +5,7 @@ from diffusers import UNet2DConditionModel
 
 @dataclass
 class TrainingConfig:
-    image_size: int = 128  # the generated image resolution
+    image_size: int = 128 # the generated image resolution
     train_batch_size: int = 256
     eval_batch_size: int = 16  # how many images to sample during evaluation
     num_epochs: int = 10
@@ -64,7 +64,7 @@ train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_
 
 from diffusers import UNet2DModel
 
-# Assuming config is defined as in your previous message
+# # Assuming config is defined as in your previous message
 # model = UNet2DModel(
 #     sample_size=config.image_size,  # the target image resolution
 #     in_channels=1,  # the number of input channels, 3 for RGB images
@@ -89,8 +89,10 @@ model = UNet2DConditionModel(
     sample_size=config.image_size,  # the target image resolution
     in_channels=1,  # the number of input channels, 3 for RGB images
     out_channels=1,  # the number of output channels
-    layers_per_block=2,  # how many ResNet layers to use per UNet block
-    block_out_channels=(32*4, 64*4, 64*4, 64*4),  # output channels for each UNet block
+    layers_per_block=3,  # how many ResNet layers to use per UNet block
+    block_out_channels=(64, 64, 64, 64),
+    encoder_hid_dim = 10,
+    cross_attention_dim=10  # output channels for each UNet block
 )
 
 # Sample image from your dataset for testing
@@ -207,10 +209,10 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             clean_images = batch["images"].to(device)
             labels = batch["labels"].to(device)
             labels = labels.unsqueeze(1)
-            labels= labels.repeat(1, 1, 1280)
+            labels= labels.repeat(1, 1, 10)
             labels = labels.to(torch.float32)
             labels = labels.to(device)
-            print(labels.size())
+            #print(labels.size())
             
             
             #print(clean_images.size())
@@ -233,7 +235,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
-                print(noisy_images.size(), timesteps.size(), labels.size())
+                # print(noisy_images.size(), timesteps.size(), labels.size())
                 
                 noise_pred = model(noisy_images, timesteps, labels, return_dict=False)[0]
                 #print(noise_pred.size())
