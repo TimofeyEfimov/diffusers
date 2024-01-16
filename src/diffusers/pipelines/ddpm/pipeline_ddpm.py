@@ -38,9 +38,9 @@ class DDPMPipeline(DiffusionPipeline):
 
     model_cpu_offload_seq = "unet"
 
-    def __init__(self, unet, scheduler):
+    def __init__(self, unet, scheduler, cond=None):
         super().__init__()
-        self.register_modules(unet=unet, scheduler=scheduler)
+        self.register_modules(unet=unet, scheduler=scheduler, cond=cond)
 
     @torch.no_grad()
     def __call__(
@@ -112,7 +112,16 @@ class DDPMPipeline(DiffusionPipeline):
 
         for t in self.progress_bar(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.unet(image, t).sample
+            
+            # cond = torch.randint(0, 2, (16, 1, 1280))
+            # cond = cond.to(torch.float32)
+            # cond = cond.to(self.device)
+            # model_output = self.unet(image, t, cond).sample
+            if self.cond == None:
+                model_output = self.unet(image, t).sample
+            else:
+                print("NUMBERS ARE", self.cond)
+                model_output = self.unet(image, t, self.cond).sample
 
             # 2. compute previous image: x_t -> x_t-1
             image = self.scheduler.step(model_output, t, image, generator=generator).prev_sample

@@ -9,8 +9,8 @@ class TrainingConfig:
     gradient_accumulation_steps: int = 1
     learning_rate: float = 1e-4
     lr_warmup_steps: int = 500
-    save_image_epochs: int = 2
-    save_model_epochs: int = 2
+    save_image_epochs: int = 1
+    save_model_epochs: int = 1
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir: str = "cond"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload the saved model to the HF Hub
@@ -198,9 +198,11 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
 
             with accelerator.accumulate(model):
+                print("hi")
                 # Predict the noise residual
                 cond = torch.randint(0, 2, (16, 1, 1280))
                 cond = cond.to(torch.float32)
+                cond = cond.to(device)
 
                 # for entry in noisy_images:
                 #     print("Data type of entry:", entry.dtype)
@@ -222,7 +224,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             global_step += 1
 
             if accelerator.is_main_process:
-                pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+                pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler, cond=cond)
 
                 if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
                     evaluate(config, epoch, pipeline)
