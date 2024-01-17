@@ -7,7 +7,7 @@ class TrainingConfig:
     image_size: int = 32  # the generated image resolution
     train_batch_size: int = 128
     eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 2
+    num_epochs: int = 1
     gradient_accumulation_steps: int = 1
     norm_num_groups = 8
     learning_rate: float = 1e-4
@@ -194,15 +194,12 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         for step, batch in enumerate(train_dataloader):
             
             clean_images = batch["images"].to(device)
-
-
-
+            
             
             #print(clean_images.size())
             # Sample noise to add to the images
             noise = torch.randn(clean_images.shape, device=device)
-            #second_noise = torch.randn(clean_images.shape, device=device)
-            
+            second_noise = torch.randn(clean_images.shape, device=device)
             
             
             bs = clean_images.shape[0]
@@ -216,30 +213,18 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             # Add noise to the clean images according to the noise magnitude at each timestep
             # (this is the forward diffusion process)
             noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
-            
             #print(noisy_images.size())
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
-                # noise_transpose = noise.transpose(2,3)
-                # first_term = torch.matmul(noise,noise_transpose)
-                # first_term = -torch.matmul(first_term, second_noise)
+                noise_transpose = noise.transpose(2,3)
+                first_term = torch.matmul(noise,noise_transpose)
+                first_term = -torch.matmul(first_term, second_noise)
+                merged_img2 = torch.cat((noisy_images, second_noise), dim=1)
 
-                # device1 = noisy_images.device
-                # device2 = second_noise.device
-
-                # print(device1, device2)
-                 
-                # merged_img2 = torch.cat((noisy_images, second_noise), dim=1)
-
-
-                noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
+                noise_pred = model(merged_img2, timesteps, return_dict=False)[0]
                 #print(noise_pred.size())
-                # print("Data type of noisy_images entries:", noisy_images.dtype)
-                # print("Data type of merged_img2 entries:", merged_img2.dtype)
-                # print("Data type of first_term entries:", first_term.dtype)
-
-                loss = F.mse_loss(noise_pred, noise)
+                loss = F.mse_loss(noise_pred, first_term)
                 accelerator.backward(loss)
 
                 accelerator.clip_grad_norm_(model.parameters(), 1.0)
@@ -256,12 +241,26 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         end_time = time.time() 
         epoch_duration = end_time - start_time  # Calculate the duration of the epoch
         print(f"Epoch {epoch} completed in {epoch_duration:.2f} seconds")
-    return model, noise_scheduler
-
+    return model 
 print("Hi i am here")
 
 from accelerate import notebook_launcher
 
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = torch.nn.DataParallel(model)
+model = model.to(device)
+print(device)
+
+torch.save(model.state_dict(), "/home/tefimov/diffusers/src/weights/model.pth")
+
+
+
+print("saved")
+
+modelV = train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
+
+torch.save(modelV.state_dict(), "/home/tefimov/diffusers/src/weights/modelV.pth")
 
 model = UNet2DModel(
     sample_size=config.image_size,  # the target image resolution
@@ -286,19 +285,12 @@ model = UNet2DModel(
     ),
 )
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model = torch.nn.DataParallel(model)
-model = model.to(device)
-print(device)
 
-
-modelV, lr_schedulerV = train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
-
-
-
-
-def train_loop(config, model, modelV, noise_scheduler, optimizer, train_dataloader, lr_scheduler):
+def train_loop(config, model, modelV,noise_scheduler, optimizer, train_dataloader, lr_scheduler):
     device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    for param in modelV.parameters():
+        param.requires_grad = False
     #Initialize accelerator and tensorboard logging
     accelerator = Accelerator(
         mixed_precision=config.mixed_precision,
@@ -353,7 +345,6 @@ def train_loop(config, model, modelV, noise_scheduler, optimizer, train_dataload
             #print(clean_images.size())
             # Sample noise to add to the images
             noise = torch.randn(clean_images.shape, device=device)
-            second_noise = torch.randn(clean_images.shape, device=device)
             
             
             
@@ -383,6 +374,7 @@ def train_loop(config, model, modelV, noise_scheduler, optimizer, train_dataload
                 lr_scheduler.step()
                 optimizer.zero_grad()
 
+
         progress_bar.update(1)
         logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
         progress_bar.set_postfix(**logs)
@@ -408,30 +400,7 @@ def train_loop(config, model, modelV, noise_scheduler, optimizer, train_dataload
         end_time = time.time() 
         epoch_duration = end_time - start_time  # Calculate the duration of the epoch
         print(f"Epoch {epoch} completed in {epoch_duration:.2f} seconds")
-
-
-model = UNet2DModel(
-    sample_size=config.image_size,  # the target image resolution
-    in_channels=3,  # the number of input channels, 3 for RGB images
-    out_channels=3,  # the number of output channels
-    freq_shift=1,
-    flip_sin_to_cos = False,
-
-    layers_per_block=2,  # how many ResNet layers to use per UNet block
-    block_out_channels=(128, 256, 256, 256),  # output channels for each UNet block
-    down_block_types=(
-        "DownBlock2D",  # a regular ResNet downsampling block
-        "DownBlock2D",
-        "AttnDownBlock2D",  # a ResNet block with spatial self-attention
-        "DownBlock2D",
-    ),
-    up_block_types=(
-        "UpBlock2D",  # a regular ResNet upsampling block
-        "AttnUpBlock2D",  # a ResNet block with spatial self-attention
-        "UpBlock2D",
-        "UpBlock2D",
-    ),
-)
+    return model 
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -439,5 +408,10 @@ model = torch.nn.DataParallel(model)
 model = model.to(device)
 print(device)
 
+torch.save(model.state_dict(), "/home/tefimov/diffusers/src/weights/modelF.pth")
 
-train_loop(config, model, modelV, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
+print("saved")
+
+model = train_loop(config, model, modelV, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
+
+torch.save(modelV.state_dict(), "/home/tefimov/diffusers/src/weights/modelF.pth")
