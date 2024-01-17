@@ -38,9 +38,9 @@ class DDPMPipeline(DiffusionPipeline):
 
     model_cpu_offload_seq = "unet"
 
-    def __init__(self, unet, scheduler, cond=None):
+    def __init__(self, unet, modelV, scheduler):
         super().__init__()
-        self.register_modules(unet=unet, scheduler=scheduler, cond=cond)
+        self.register_modules(unet=unet, modelV=None, scheduler=scheduler)
 
     @torch.no_grad()
     def __call__(
@@ -117,11 +117,17 @@ class DDPMPipeline(DiffusionPipeline):
             # cond = cond.to(torch.float32)
             # cond = cond.to(self.device)
             # model_output = self.unet(image, t, cond).sample
-            if self.cond == None:
-                model_output = self.unet(image, t).sample
-            else:
-                print("NUMBERS ARE", self.cond)
-                model_output = self.unet(image, t, self.cond).sample
+            # print("Eval image size is")
+            # print(image.size())
+            # if self.cond == None:
+            #     model_output = self.unet(image, t).sample
+            # else:
+            # print("NUMBERS ARE", self.cond)
+            cond = torch.randint(0, 10, (42, 1, 100))
+            cond = cond.to(torch.float32)
+            cond = cond.to(self.device)
+            #print(image.size(), t.size(), cond.size())
+            model_output = self.unet(image, t, cond).sample
 
             # 2. compute previous image: x_t -> x_t-1
             image = self.scheduler.step(model_output, t, image, generator=generator).prev_sample

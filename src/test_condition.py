@@ -7,8 +7,8 @@ from diffusers import UNet2DConditionModel
 class TrainingConfig:
     image_size: int = 32 # the generated image resolution
     train_batch_size: int = 256
-    eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 10
+    eval_batch_size: int = 42  # how many images to sample during evaluation
+    num_epochs: int = 15
     gradient_accumulation_steps: int = 1
     norm_num_groups = 8
     learning_rate: float = 1e-4
@@ -30,7 +30,6 @@ print(config)
 
 
 dataset = load_dataset('mnist', split='train')
-
 import matplotlib.pyplot as plt
 
 fig, axs = plt.subplots(1, 4, figsize=(16, 4))
@@ -122,11 +121,12 @@ from diffusers import UNet2DModel
 # )
 
 model = UNet2DConditionModel(
+    sample_size=config.image_size,
     in_channels = 1,
     out_channels=1,
     layers_per_block=2, 
     block_out_channels=(64, 64, 64, 64),
-    cross_attention_dim=1
+    cross_attention_dim=1024
       # output channels for each UNet block
 )
 
@@ -177,7 +177,7 @@ def evaluate(config, epoch, pipeline):
     ).images
 
     # Make a grid out of the images
-    image_grid = make_image_grid(images, rows=4, cols=4)
+    image_grid = make_image_grid(images, rows=6, cols=7)
 
     # Save the images
     test_dir = os.path.join(config.output_dir, "samples")
@@ -191,7 +191,7 @@ from pathlib import Path
 import os
 
 
-def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler):
+def train_loopV(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     #Initialize accelerator and tensorboard logging
     accelerator = Accelerator(
@@ -247,7 +247,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             # print("Labels size is", labels.size())
             # print("Labels are")
             labels = labels.unsqueeze(1)
-            labels= labels.repeat(1, 1)
+            labels= labels.repeat(1, 100)
             #labels = labels.expand(-1, -1, 1280)
             labels = labels.unsqueeze(1)
             labels = labels.to(torch.float32)
@@ -258,7 +258,9 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             #print(clean_images.size())
             # Sample noise to add to the images
             noise = torch.randn(clean_images.shape, device=device)
+            second_noise = torch.randn(clean_images.shape, device=device)
             
+
             
             bs = clean_images.shape[0]
 
@@ -275,12 +277,16 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
-                # print(noisy_images.size(), timesteps.size(), labels.size())
+                second_noise_cond= second_noise.view(second_noise.size(0),1, -1)
+                #print(noisy_images.size(),timesteps.size(), labels.size(), second_noise_cond.size())
                 #print(model)
 
-                noise_pred = model(noisy_images, timesteps, labels, return_dict=False)[0]
+                
+                noise_pred = model(noisy_images, timesteps, second_noise, return_dict=False)[0]
                 #print(noise_pred.size())
-                loss = F.mse_loss(noise_pred, noise)
+                noise_transpose = noise.transpose(2,3)
+                first_term = torch.matmul(noise,noise_transpose)
+                loss = F.mse_loss(noise_pred, -noise)
                 accelerator.backward(loss)
 
                 accelerator.clip_grad_norm_(model.parameters(), 1.0)
@@ -295,12 +301,12 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         global_step += 1
 
         if accelerator.is_main_process:
-            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler, cond=labels)
-
-            if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
+            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+            print("Evaluation labels are labels", labels.size())
+            if (epoch + 100) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
                 evaluate(config, epoch, pipeline)
 
-            if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
+            if (epoch + 100) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
                 if config.push_to_hub:
                     upload_folder(
                         repo_id=repo_id,
@@ -314,23 +320,166 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         epoch_duration = end_time - start_time  # Calculate the duration of the epoch
         print(f"Epoch {epoch} completed in {epoch_duration:.2f} seconds")
 
+    return model, noise_scheduler
 print("Hi i am here")
 
 from accelerate import notebook_launcher
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-# model = torch.nn.DataParallel(model)
+model = torch.nn.DataParallel(model)
 model = model.to(device)
 print(device)
 
+# Train v_t estimate 
+modelV, noise_schedulerV = train_loopV(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
 
-train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
+# Train the normal network
+
+model = UNet2DConditionModel(
+    sample_size=config.image_size,
+    in_channels = 1,
+    out_channels=1,
+    layers_per_block=2, 
+    block_out_channels=(64, 64, 64, 64),
+    cross_attention_dim=1024
+      # output channels for each UNet block
+)
+
+#device = "cuda" if torch.cuda.is_available() else "cpu"
+model = torch.nn.DataParallel(model)
+model = model.to(device)
+
+# Train v_t estimate 
+modelV, noise_schedulerV = train_loop(config, model,modelV, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
+
+def train_loop(config, model,modelV, noise_scheduler, optimizer, train_dataloader, lr_scheduler):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    #Initialize accelerator and tensorboard logging
+    accelerator = Accelerator(
+        mixed_precision=config.mixed_precision,
+        gradient_accumulation_steps=config.gradient_accumulation_steps,
+        log_with="tensorboard",
+        project_dir=os.path.join(config.output_dir, "logs")
+    )
+
+    # model = torch.nn.DataParallel(model)
+    # model.to(device)
+    if accelerator.is_main_process:
+        if config.output_dir is not None:
+            os.makedirs(config.output_dir, exist_ok=True)
+        if config.push_to_hub:
+            repo_id = create_repo(
+                repo_id=config.hub_model_id or Path(config.output_dir).name, exist_ok=True
+            ).repo_id
+        
+
+    # Prepare everything
+    # There is no specific order to remember, you just need to unpack the
+    # objects in the same order you gave them to the prepare method.
+    model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+        model, optimizer, train_dataloader, lr_scheduler
+    )
 
 
-print("Hi i am here")
+    # model = torch.nn.DataParallel(model)
+    # model.to(device)
 
-import glob
+    first_param = next(model.parameters()).device
+    if isinstance(model, torch.nn.DataParallel):
+        print("Model is on multiple GPUs:", model.device_ids)
+    else:
+        print("Model is on single device:", next(model.parameters()).device)
+    # Assuming 'accelerator' is your Accelerator object
+    print("Accel Devices:", accelerator.device_placement)
 
-sample_images = sorted(glob.glob(f"{config.output_dir}/samples/*.png"))
-Image.open(sample_images[-1])
+    global_step = 0
+
+    # Now you train the model
+    for epoch in range(config.num_epochs):
+        print(epoch)
+        start_time = time.time() 
+        progress_bar = tqdm(total=len(train_dataloader), disable=not accelerator.is_local_main_process)
+        progress_bar.set_description(f"Epoch {epoch}")
+
+        for step, batch in enumerate(train_dataloader):
+            
+            clean_images = batch["images"].to(device)
+            labels = batch["labels"].to(device)
+            # print("Labels size is", labels.size())
+            # print("Labels are")
+            labels = labels.unsqueeze(1)
+            labels= labels.repeat(1, 100)
+            #labels = labels.expand(-1, -1, 1280)
+            labels = labels.unsqueeze(1)
+            labels = labels.to(torch.float32)
+            labels = labels.to(device)
+            #print(labels.size())
+            
+            
+            #print(clean_images.size())
+            # Sample noise to add to the images
+            noise = torch.randn(clean_images.shape, device=device)
+            second_noise = torch.randn(clean_images.shape, device=device)
+            
+
+            
+            bs = clean_images.shape[0]
+
+            # Sample a random timestep for each image
+            timesteps = torch.randint(
+                0, noise_scheduler.config.num_train_timesteps, (bs,), device=device,
+                dtype=torch.int64
+            )
+
+            # Add noise to the clean images according to the noise magnitude at each timestep
+            # (this is the forward diffusion process)
+            noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
+            #print(noisy_images.size())
+
+            with accelerator.accumulate(model):
+                # Predict the noise residual
+                second_noise_cond= second_noise.view(second_noise.size(0),1, -1)
+                #print(noisy_images.size(),timesteps.size(), labels.size(), second_noise_cond.size())
+                #print(model)
+
+                
+                noise_pred = model(noisy_images, timesteps, second_noise, return_dict=False)[0]
+                #print(noise_pred.size())
+                noise_transpose = noise.transpose(2,3)
+                first_term = torch.matmul(noise,noise_transpose)
+                loss = F.mse_loss(noise_pred, -noise)
+                accelerator.backward(loss)
+
+                accelerator.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
+                lr_scheduler.step()
+                optimizer.zero_grad()
+
+        progress_bar.update(1)
+        logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
+        progress_bar.set_postfix(**logs)
+        accelerator.log(logs, step=global_step)
+        global_step += 1
+
+        if accelerator.is_main_process:
+            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+            print("Evaluation labels are labels", labels.size())
+            if (epoch + 100) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
+                evaluate(config, epoch, pipeline)
+
+            if (epoch + 100) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
+                if config.push_to_hub:
+                    upload_folder(
+                        repo_id=repo_id,
+                        folder_path=config.output_dir,
+                        commit_message=f"Epoch {epoch}",
+                        ignore_patterns=["step_*", "epoch_*"],
+                    )
+                else:
+                    pipeline.save_pretrained(config.output_dir)
+        end_time = time.time() 
+        epoch_duration = end_time - start_time  # Calculate the duration of the epoch
+        print(f"Epoch {epoch} completed in {epoch_duration:.2f} seconds")
+
+    return model, noise_scheduler
