@@ -248,8 +248,8 @@ from accelerate import notebook_launcher
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-model = torch.nn.DataParallel(model)
-model = model.to(device)
+#model = torch.nn.DataParallel(model)
+modelV= model.to(device)
 print(device)
 
 torch.save(model.state_dict(), "/home/tefimov/diffusers/src/weights/model.pth")
@@ -258,9 +258,9 @@ torch.save(model.state_dict(), "/home/tefimov/diffusers/src/weights/model.pth")
 
 print("saved")
 
-modelV = train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
+# modelV = train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
 
-torch.save(modelV.state_dict(), "/home/tefimov/diffusers/src/weights/modelV.pth")
+# torch.save(modelV.state_dict(), "/home/tefimov/diffusers/src/weights/modelV.pth")
 
 model = UNet2DModel(
     sample_size=config.image_size,  # the target image resolution
@@ -286,7 +286,7 @@ model = UNet2DModel(
 )
 
 
-def train_loop(config, model, modelV,noise_scheduler, optimizer, train_dataloader, lr_scheduler):
+def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     for param in modelV.parameters():
@@ -402,7 +402,6 @@ def train_loop(config, model, modelV,noise_scheduler, optimizer, train_dataloade
         print(f"Epoch {epoch} completed in {epoch_duration:.2f} seconds")
     return model 
 
-
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = torch.nn.DataParallel(model)
 model = model.to(device)
@@ -412,6 +411,6 @@ torch.save(model.state_dict(), "/home/tefimov/diffusers/src/weights/modelF.pth")
 
 print("saved")
 
-model = train_loop(config, model, modelV, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
+model = train_loop(config, model,  noise_scheduler, optimizer, train_dataloader, lr_scheduler)
 
 torch.save(modelV.state_dict(), "/home/tefimov/diffusers/src/weights/modelF.pth")
