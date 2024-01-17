@@ -5,17 +5,17 @@ import time
 @dataclass
 class TrainingConfig:
     image_size: int = 32  # the generated image resolution
-    train_batch_size: int = 256
+    train_batch_size: int = 128
     eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 10
+    num_epochs: int = 100
     gradient_accumulation_steps: int = 1
     norm_num_groups = 8
     learning_rate: float = 1e-4
-    lr_warmup_steps: int = 0
-    save_image_epochs: int = 5
-    save_model_epochs: int = 5
+    lr_warmup_steps: int =500
+    save_image_epochs: int = 10
+    save_model_epochs: int = 10
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir: str = "mnist-model"  # the model name locally and on the HF Hub
+    output_dir: str = "cifar-model"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload the saved model to the HF Hub
     hub_model_id: str = "<your-username>/<my-awesome-model>"  # the name of the repository to create on the HF Hub
     hub_private_repo: bool = False
@@ -28,15 +28,10 @@ config = TrainingConfig()
 print(config)
 
 
-dataset = load_dataset('mnist', split='train')
+dataset = load_dataset('cifar10', split='train')
 
 import matplotlib.pyplot as plt
 
-fig, axs = plt.subplots(1, 4, figsize=(16, 4))
-for i, image in enumerate(dataset[:4]["image"]):
-    axs[i].imshow(image)
-    axs[i].set_axis_off()
-fig.show()
 
 from torchvision import transforms
 
@@ -49,7 +44,7 @@ preprocess = transforms.Compose(
 )
 
 def transform(examples):
-    images = [preprocess(image) for image in examples["image"]]
+    images = [preprocess(image) for image in examples["img"]]
     return {"images": images}
 
 
@@ -65,10 +60,13 @@ from diffusers import UNet2DModel
 # Assuming config is defined as in your previous message
 model = UNet2DModel(
     sample_size=config.image_size,  # the target image resolution
-    in_channels=1,  # the number of input channels, 3 for RGB images
-    out_channels=1,  # the number of output channels
+    in_channels=3,  # the number of input channels, 3 for RGB images
+    out_channels=3,  # the number of output channels
+    freq_shift=1,
+    flip_sin_to_cos = False,
+
     layers_per_block=2,  # how many ResNet layers to use per UNet block
-    block_out_channels=(32*4, 64*4, 64*4, 64*4),  # output channels for each UNet block
+    block_out_channels=(128, 256, 256, 256),  # output channels for each UNet block
     down_block_types=(
         "DownBlock2D",  # a regular ResNet downsampling block
         "DownBlock2D",
@@ -122,6 +120,7 @@ import os
 
 
 def evaluate(config, epoch, pipeline):
+    print("inside evaluate")
     # Sample some images from random noise (this is the backward diffusion process).
     # The default pipeline output type is `List[PIL.Image]`
     images = pipeline(
@@ -234,7 +233,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         global_step += 1
 
         if accelerator.is_main_process:
-            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), modelV=None, scheduler=noise_scheduler)
 
             if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
                 evaluate(config, epoch, pipeline)

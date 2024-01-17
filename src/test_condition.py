@@ -444,11 +444,12 @@ def train_loop(config, model,modelV, noise_scheduler, optimizer, train_dataloade
                 #print(model)
 
                 
-                noise_pred = model(noisy_images, timesteps, second_noise, return_dict=False)[0]
+                noise_pred = model(noisy_images, timesteps, second_noise_cond, return_dict=False)[0]
                 #print(noise_pred.size())
                 noise_transpose = noise.transpose(2,3)
                 first_term = torch.matmul(noise,noise_transpose)
-                loss = F.mse_loss(noise_pred, -noise)
+                first_term = torch.matmul(first_term, second_noise)
+                loss = F.mse_loss(noise_pred, -first_term)
                 accelerator.backward(loss)
 
                 accelerator.clip_grad_norm_(model.parameters(), 1.0)
@@ -463,7 +464,7 @@ def train_loop(config, model,modelV, noise_scheduler, optimizer, train_dataloade
         global_step += 1
 
         if accelerator.is_main_process:
-            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), modelV=None, scheduler=noise_scheduler)
             print("Evaluation labels are labels", labels.size())
             if (epoch + 100) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
                 evaluate(config, epoch, pipeline)
