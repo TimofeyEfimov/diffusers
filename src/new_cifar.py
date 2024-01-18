@@ -12,8 +12,8 @@ class TrainingConfig:
     norm_num_groups = 8
     learning_rate: float = 1e-4
     lr_warmup_steps: int = 0
-    save_image_epochs: int = 2
-    save_model_epochs: int = 2
+    save_image_epochs: int = 5
+    save_model_epochs: int = 5
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir: str = "new_cifar_model"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload 32the saved model to the HF Hub
@@ -24,6 +24,29 @@ class TrainingConfig:
 
 # Create an instance of the config
 config = TrainingConfig()
+
+@dataclass
+class TrainingConfigV:
+    image_size: int = 32  # the generated image resolution
+    train_batch_size: int = 128
+    eval_batch_size: int = 16  # how many images to sample during evaluation
+    num_epochs: int = 1
+    gradient_accumulation_steps: int = 1
+    norm_num_groups = 8
+    learning_rate: float = 1e-4
+    lr_warmup_steps: int = 0
+    save_image_epochs: int = 5
+    save_model_epochs: int = 5
+    mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
+    output_dir: str = "new_cifar_model"  # the model name locally and on the HF Hub
+    push_to_hub: bool = False # whether to upload 32the saved model to the HF Hub
+    hub_model_id: str = "<your-username>/<my-awesome-model>"  # the name of the repository to create on the HF Hub
+    hub_private_repo: bool = False
+    overwrite_output_dir: bool = True  # overwrite the old model when re-running the notebook
+    seed: int = 0
+
+# Create an instance of the config
+configV= TrainingConfigV()
 
 print(config)
 
@@ -243,10 +266,15 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
             #print(noisy_images.size())
             noise_transpose = noise.transpose(2,3)
-            first_term = torch.matmul(noise,noise_transpose)
+            
+            print("===========================================")
+            print("New algo sizes:")
+            print(noise.size(), noise_transpose.size())
             first_term = -torch.matmul(first_term, second_noise)
+            print(first_term.size())
             merged_img2 = torch.cat((noisy_images, second_noise), dim=1)
-
+            print(merged_img2.size())
+            print("===========================================")
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
@@ -283,7 +311,7 @@ lr_schedulerV = get_cosine_schedule_with_warmup(
 )
 
 
-#modelV = train_loop(config, modelV, noise_scheduler, optimizerV, train_dataloader, lr_schedulerV)
+modelV = train_loop(configV, modelV, noise_scheduler, optimizerV, train_dataloader, lr_schedulerV)
 
 
 
