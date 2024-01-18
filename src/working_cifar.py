@@ -7,13 +7,13 @@ class TrainingConfig:
     image_size: int = 32  # the generated image resolution
     train_batch_size: int = 128
     eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 100
+    num_epochs: int = 15
     gradient_accumulation_steps: int = 1
     norm_num_groups = 8
     learning_rate: float = 1e-4
     lr_warmup_steps: int =500
-    save_image_epochs: int = 10
-    save_model_epochs: int = 10
+    save_image_epochs: int = 5
+    save_model_epochs: int = 5
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir: str = "cifar-model"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload the saved model to the HF Hub
@@ -233,7 +233,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         global_step += 1
 
         if accelerator.is_main_process:
-            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), modelV=modelV, scheduler=noise_scheduler)
+            pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), modelV=None, scheduler=noise_scheduler)
 
             if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
                 evaluate(config, epoch, pipeline)

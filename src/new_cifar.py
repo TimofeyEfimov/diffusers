@@ -7,7 +7,7 @@ class TrainingConfig:
     image_size: int = 32  # the generated image resolution
     train_batch_size: int = 128
     eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 10
+    num_epochs: int = 50
     gradient_accumulation_steps: int = 1
     norm_num_groups = 8
     learning_rate: float = 1e-4
@@ -267,14 +267,15 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             #print(noisy_images.size())
             noise_transpose = noise.transpose(2,3)
             
-            print("===========================================")
-            print("New algo sizes:")
-            print(noise.size(), noise_transpose.size())
+            # print("===========================================")
+            # print("New algo sizes:")
+            # print(noise.size(), noise_transpose.size())
+            first_term = torch.matmul(noise,noise_transpose)
             first_term = -torch.matmul(first_term, second_noise)
-            print(first_term.size())
+            # print(first_term.size())
             merged_img2 = torch.cat((noisy_images, second_noise), dim=1)
-            print(merged_img2.size())
-            print("===========================================")
+            # print(merged_img2.size())
+            # print("===========================================")
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
