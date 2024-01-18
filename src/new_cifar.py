@@ -144,13 +144,14 @@ import os
 
 
 
-def train_loop(config, model,noise_scheduler, optimizer, train_dataloader, lr_scheduler):
+def train_loop(config, model, modelV, noise_scheduler, optimizer, train_dataloader, lr_scheduler):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 
-    # for param in modelV.parameters():
-    #     param.requires_grad = False
+    for param in modelV.parameters():
+        param.requires_grad = False
+    modelV.eval()
     #Initialize accelerator and tensorboard logging
     accelerator = Accelerator(
         mixed_precision=config.mixed_precision,
@@ -290,10 +291,11 @@ modelV = UNet2DModel(
         "UpBlock2D",
     ),
 )
-modelV = torch.nn.DataParallel(model)
+
+modelV = torch.nn.DataParallel(modelV)
 modelV = modelV.to(device)
 
-train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
+train_loop(config, model, modelV, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
 
 
 print("Hi i am here")
