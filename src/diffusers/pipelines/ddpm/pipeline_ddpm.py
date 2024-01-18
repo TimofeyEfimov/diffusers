@@ -40,7 +40,7 @@ class DDPMPipeline(DiffusionPipeline):
 
     def __init__(self, unet, modelV, scheduler):
         super().__init__()
-        self.register_modules(unet=unet, modelV=None, scheduler=scheduler)
+        self.register_modules(unet=unet, modelV=modelV, scheduler=scheduler)
 
     @torch.no_grad()
     def __call__(
@@ -99,18 +99,21 @@ class DDPMPipeline(DiffusionPipeline):
             )
         else:
             image_shape = (batch_size, self.unet.config.in_channels, *self.unet.config.sample_size)
+        device = self.unet.device
 
-        if self.device.type == "mps":
+        if device.type == "mps":
             # randn does not work reproducibly on mps
             image = randn_tensor(image_shape, generator=generator)
-            image = image.to(self.device)
+            image = image.to(device)
         else:
-            image = randn_tensor(image_shape, generator=generator, device=self.device)
+            image = randn_tensor(image_shape, generator=generator, device=device)
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
 
         for t in self.progress_bar(self.scheduler.timesteps):
+            second_noise = randn_tensor(image_shape, generator=generator, device=device)
+            merged_img2 = torch.cat((image, second_noise), dim=1)
             # 1. predict noise model_output
             
             # cond = torch.randint(0, 2, (16, 1, 1280))
@@ -123,14 +126,32 @@ class DDPMPipeline(DiffusionPipeline):
             #     model_output = self.unet(image, t).sample
             # else:
             # print("NUMBERS ARE", self.cond)
-            cond = torch.randint(0, 10, (42, 1, 100))
-            cond = cond.to(torch.float32)
-            cond = cond.to(self.device)
-            #print(image.size(), t.size(), cond.size())
-            model_output = self.unet(image, t, cond).sample
+            # cond = torch.randint(0, 10, (42, 1, 100))
+            # cond = cond.to(torch.float32)
+            # cond = cond.to(self.device)
+            # print(image.size(), t.size())
 
+            # print("devices first are")
+            # print(self.unet.device, image.device, t.device)
+            t = t.to(device=self.unet.device)
+            model_output = self.unet(image, t).sample
+
+            # print(merged_img2.size(), t.size())
+            # print(self.modelV)
+            # print("devices second are")
+            # print(merged_img2.device, t.device)
+
+            # modelV= self.modelV.module
+
+            # # Specify the target GPU (change 0 to the desired GPU index)
+            # target_gpu = 0
+
+            # # Move the model to the target GPU
+            # modelV = modelV.to(f'cuda:{target_gpu}')
+            
+            #modelV_output = self.modelV(merged_img2, t).sample
             # 2. compute previous image: x_t -> x_t-1
-            image = self.scheduler.step(model_output, t, image, generator=generator).prev_sample
+            image = self.scheduler.step(model_output, model_output, t, image, generator=generator).prev_sample
 
         image = (image / 2 + 0.5).clamp(0, 1)
         image = image.cpu().permute(0, 2, 3, 1).numpy()

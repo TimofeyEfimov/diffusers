@@ -7,15 +7,15 @@ class TrainingConfig:
     image_size: int = 32  # the generated image resolution
     train_batch_size: int = 128
     eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 2
+    num_epochs: int = 10
     gradient_accumulation_steps: int = 1
     norm_num_groups = 8
     learning_rate: float = 1e-4
-    lr_warmup_steps: int =500
-    save_image_epochs: int = 1
-    save_model_epochs: int = 1
+    lr_warmup_steps: int = 0
+    save_image_epochs: int = 5
+    save_model_epochs: int = 5
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir: str = "cifar-model"  # the model name locally and on the HF Hub
+    output_dir: str = "new_cifar_model"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload 32the saved model to the HF Hub
     hub_model_id: str = "<your-username>/<my-awesome-model>"  # the name of the repository to create on the HF Hub
     hub_private_repo: bool = False
@@ -144,7 +144,7 @@ import os
 
 modelV = UNet2DModel(
     sample_size=config.image_size,  # the target image resolution
-    in_channels=3,  # the number of input channels, 3 for RGB images
+    in_channels=6,  # the number of input channels, 3 for RGB images
     out_channels=3,  # the number of output channels
     freq_shift=1,
     flip_sin_to_cos = False,
@@ -227,7 +227,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             #print(clean_images.size())
             # Sample noise to add to the images
             noise = torch.randn(clean_images.shape, device=device)
-            # second_noise = torch.randn(clean_images.shape, device=device)
+            second_noise = torch.randn(clean_images.shape, device=device)
             
             
             bs = clean_images.shape[0]
@@ -242,14 +242,19 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             # (this is the forward diffusion process)
             noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
             #print(noisy_images.size())
+            noise_transpose = noise.transpose(2,3)
+            first_term = torch.matmul(noise,noise_transpose)
+            first_term = -torch.matmul(first_term, second_noise)
+            merged_img2 = torch.cat((noisy_images, second_noise), dim=1)
+
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
-                #merged_img2 = torch.cat((noisy_images, noisy_images), dim=1)
-                noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
+                merged_img2 = torch.cat((noisy_images, noisy_images), dim=1)
+                noise_pred = model(merged_img2, timesteps, return_dict=False)[0]
 
                 #print(noise_pred.size())
-                loss = F.mse_loss(noise_pred, noise)
+                loss = F.mse_loss(noise_pred, first_term)
                 accelerator.backward(loss)
 
                 accelerator.clip_grad_norm_(model.parameters(), 1.0)
@@ -270,8 +275,15 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 
     return model
 
-optimizer = torch.optim.AdamW(modelV.parameters(), lr=config.learning_rate)
-modelV = train_loop(config, modelV, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
+optimizerV = torch.optim.AdamW(modelV.parameters(), lr=config.learning_rate)
+lr_schedulerV = get_cosine_schedule_with_warmup(
+    optimizer=optimizerV,
+    num_warmup_steps=config.lr_warmup_steps,
+    num_training_steps=(len(train_dataloader) * config.num_epochs),
+)
+
+
+#modelV = train_loop(config, modelV, noise_scheduler, optimizerV, train_dataloader, lr_schedulerV)
 
 
 
@@ -395,7 +407,7 @@ print("Hi i am here")
 
 from accelerate import notebook_launcher
 
-
+optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = torch.nn.DataParallel(model)
 model = model.to(device)
