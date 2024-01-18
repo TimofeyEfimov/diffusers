@@ -12,8 +12,8 @@ class TrainingConfig:
     norm_num_groups = 8
     learning_rate: float = 1e-4
     lr_warmup_steps: int = 0
-    save_image_epochs: int = 5
-    save_model_epochs: int = 5
+    save_image_epochs: int = 2
+    save_model_epochs: int = 2
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir: str = "new_cifar_model"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload 32the saved model to the HF Hub
@@ -166,7 +166,7 @@ modelV = UNet2DModel(
 )
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-modelV = torch.nn.DataParallel(modelV)
+# modelV = torch.nn.DataParallel(modelV)
 modelV = modelV.to(device)
 
 
