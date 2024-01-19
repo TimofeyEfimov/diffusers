@@ -30,7 +30,7 @@ class TrainingConfigV:
     image_size: int = 32  # the generated image resolution
     train_batch_size: int = 128
     eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 1
+    num_epochs: int = 20
     gradient_accumulation_steps: int = 1
     norm_num_groups = 8
     learning_rate: float = 1e-4
@@ -279,7 +279,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
-                merged_img2 = torch.cat((noisy_images, noisy_images), dim=1)
+                #merged_img2 = torch.cat((noisy_images, merged_img2), dim=1)
                 noise_pred = model(merged_img2, timesteps, return_dict=False)[0]
 
                 #print(noise_pred.size())
@@ -436,7 +436,6 @@ print("Hi i am here")
 
 from accelerate import notebook_launcher
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = torch.nn.DataParallel(model)
 model = model.to(device)
