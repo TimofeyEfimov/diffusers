@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datasets import load_dataset
 import time
+from diffusers import UNet2DConditionModel
 
 @dataclass
 class TrainingConfig:
@@ -15,7 +16,7 @@ class TrainingConfig:
     save_image_epochs: int = 5
     save_model_epochs: int = 5
     mixed_precision: str = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir: str = "new_cifar_model"  # the model name locally and on the HF Hub
+    output_dir: str = "attention_model"  # the model name locally and on the HF Hub
     push_to_hub: bool = False # whether to upload 32the saved model to the HF Hub
     hub_model_id: str = "<your-username>/<my-awesome-model>"  # the name of the repository to create on the HF Hub
     hub_private_repo: bool = False
@@ -165,27 +166,14 @@ from tqdm.auto import tqdm
 from pathlib import Path
 import os
 
-modelV = UNet2DModel(
-    sample_size=config.image_size,  # the target image resolution
-    in_channels=6,  # the number of input channels, 3 for RGB images
-    out_channels=3,  # the number of output channels
-    freq_shift=1,
-    flip_sin_to_cos = False,
-
-    layers_per_block=2,  # how many ResNet layers to use per UNet block
-    block_out_channels=(128, 256, 256, 256),  # output channels for each UNet block
-    down_block_types=(
-        "DownBlock2D",  # a regular ResNet downsampling block
-        "DownBlock2D",
-        "AttnDownBlock2D",  # a ResNet block with spatial self-attention
-        "DownBlock2D",
-    ),
-    up_block_types=(
-        "UpBlock2D",  # a regular ResNet upsampling block
-        "AttnUpBlock2D",  # a ResNet block with spatial self-attention
-        "UpBlock2D",
-        "UpBlock2D",
-    ),
+modelV = UNet2DConditionModel(
+    sample_size=config.image_size,
+    in_channels = 3,
+    out_channels=3,
+    layers_per_block=2, 
+    block_out_channels=(128, 256, 256, 256),
+    cross_attention_dim=1024
+      # output channels for each UNet block
 )
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -273,14 +261,15 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             first_term = torch.matmul(noise,noise_transpose)
             first_term = -torch.matmul(first_term, second_noise)
             # print(first_term.size())
-            merged_img2 = torch.cat((noisy_images, second_noise), dim=1)
             # print(merged_img2.size())
             # print("===========================================")
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
                 #merged_img2 = torch.cat((noisy_images, merged_img2), dim=1)
-                noise_pred = model(merged_img2, timesteps, return_dict=False)[0]
+                input_noise = second_noise.view(bs, 3, 32*32)
+               #print(noisy_images.size(), timesteps.size(), input_noise.size())
+                noise_pred = model(noisy_images, timesteps, input_noise, return_dict=False)[0]
 
                 #print(noise_pred.size())
                 loss = F.mse_loss(noise_pred, first_term)
