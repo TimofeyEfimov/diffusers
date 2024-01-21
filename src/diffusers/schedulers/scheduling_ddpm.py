@@ -437,12 +437,38 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             predicted_variance = None
 
         # 1. compute alphas, betas
+        
+
+
         alpha_prod_t = self.alphas_cumprod[t]
         alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
         current_alpha_t = alpha_prod_t / alpha_prod_t_prev
         current_beta_t = 1 - current_alpha_t
+
+        # My generation
+        
+        alphas_t = self.alphas[t]
+        alphas_t_prev = self.alphas[prev_t] if prev_t >= 0 else self.one
+        betas_t = 1 - alphas_t
+        betas_t_prev = 1 - alphas_t_prev
+
+        newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        ns = torch.randn_like(newSample)
+
+        sigma_t = 1/alphas_t -1
+        #newSample = newSample+sigma_t**0.5*torch.randn_like(newSample)
+
+        # new temr calculation
+
+        # ns = torch.randn_like(newSample)
+        # model_output_transposed = model_output.transpose(2,3)
+        # new_term = ns+beta_prod_t*model_output*model_output_transposed*ns-modelV_output
+        # new_term2 = 0.5*betas_t/(beta_prod_t)
+        # new_term= ns-new_term*new_term2
+        newSample = newSample+sigma_t**0.5*ns
+
 
         # 2. compute predicted original sample from predicted noise also called
         # "predicted x_0" of formula (15) from https://arxiv.org/pdf/2006.11239.pdf
@@ -492,10 +518,11 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         pred_prev_sample = pred_prev_sample + variance
 
+
         if not return_dict:
             return (pred_prev_sample,)
 
-        return DDPMSchedulerOutput(prev_sample=pred_prev_sample, pred_original_sample=pred_original_sample)
+        return DDPMSchedulerOutput(prev_sample=newSample, pred_original_sample=pred_original_sample)
 
     def add_noise(
         self,

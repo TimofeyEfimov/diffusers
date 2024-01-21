@@ -38,9 +38,9 @@ class DDPMPipeline(DiffusionPipeline):
 
     model_cpu_offload_seq = "unet"
 
-    def __init__(self, unet, modelV, scheduler):
+    def __init__(self, unet, scheduler):
         super().__init__()
-        self.register_modules(unet=unet, modelV=modelV, scheduler=scheduler)
+        self.register_modules(unet=unet, scheduler=scheduler)
 
     @torch.no_grad()
     def __call__(
@@ -112,8 +112,7 @@ class DDPMPipeline(DiffusionPipeline):
         self.scheduler.set_timesteps(num_inference_steps)
 
         for t in self.progress_bar(self.scheduler.timesteps):
-            second_noise = randn_tensor(image_shape, generator=generator, device=device)
-            merged_img2 = torch.cat((image, second_noise), dim=1)
+            
             # 1. predict noise model_output
             
             # cond = torch.randint(0, 2, (16, 1, 1280))
@@ -148,10 +147,12 @@ class DDPMPipeline(DiffusionPipeline):
 
             # # Move the model to the target GPU
             # modelV = modelV.to(f'cuda:{target_gpu}')
-            
-            #modelV_output = self.modelV(merged_img2, t).sample
+            # if self.modelV is not None:
+            #     with torch.no_grad():
+            #         print(image.size(), t.size(), second_noise.size())
+            #         modelV_output = self.modelV(image, t, second_noise).sample
             # 2. compute previous image: x_t -> x_t-1
-            image = self.scheduler.step(model_output, model_output, t, image, generator=generator).prev_sample
+            image = self.scheduler.step(model_output, t, image, generator=generator).prev_sample
 
         image = (image / 2 + 0.5).clamp(0, 1)
         image = image.cpu().permute(0, 2, 3, 1).numpy()
