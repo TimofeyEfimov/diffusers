@@ -454,10 +454,10 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         betas_t = 1 - alphas_t
         betas_t_prev = 1 - alphas_t_prev
 
-        newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
-        ns = torch.randn_like(newSample)
+        newSample =  (sample - 0.5*betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        # ns = torch.randn_like(newSample)
 
-        sigma_t = 1/alphas_t -1
+        # sigma_t = 1/alphas_t -1
         #newSample = newSample+sigma_t**0.5*torch.randn_like(newSample)
 
         # new temr calculation
@@ -467,7 +467,9 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # new_term = ns+beta_prod_t*model_output*model_output_transposed*ns-modelV_output
         # new_term2 = 0.5*betas_t/(beta_prod_t)
         # new_term= ns-new_term*new_term2
-        newSample = newSample+sigma_t**0.5*ns
+
+        ## Stochasstic 
+        # newSample = newSample+sigma_t**0.5*ns
 
 
         # 2. compute predicted original sample from predicted noise also called
