@@ -454,11 +454,11 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         betas_t = 1 - alphas_t
         betas_t_prev = 1 - alphas_t_prev
 
-        newSample =  (sample - 0.5*betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
         # ns = torch.randn_like(newSample)
 
-        # sigma_t = 1/alphas_t -1
-        #newSample = newSample+sigma_t**0.5*torch.randn_like(newSample)
+        sigma_t = 1/alphas_t -1
+        newSample = newSample+sigma_t**0.5*torch.randn_like(newSample)
 
         # new temr calculation
 
