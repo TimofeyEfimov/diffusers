@@ -429,7 +429,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         t = timestep
         prev_t = self.previous_timestep(t)
-
+        
         alpha_prod_t = self.alphas_cumprod[t]
         alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
         beta_prod_t = 1 - alpha_prod_t
