@@ -398,7 +398,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
     def step(
         self,
-        model_output: torch.FloatTensor,
+        model,
         timestep: int,
         sample: torch.FloatTensor,
         generator=None,
@@ -427,18 +427,6 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         """
 
-        t = timestep
-
-        prev_t = self.previous_timestep(t)
-
-        if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
-            model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
-        else:
-            predicted_variance = None
-
-        # 1. compute alphas, betas
-        
-
 
         alpha_prod_t = self.alphas_cumprod[t]
         alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
@@ -454,10 +442,35 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         betas_t = 1 - alphas_t
         betas_t_prev = 1 - alphas_t_prev
 
+        t = timestep
+
+        # Term 1
+        second_noise = torch.randn_like(sample)
+        sample = sample + torch.sqrt(0.5*(1-alphas_t)) * second_noise
+        
+        model_output = model(sample, t).sample
+        
+
+        prev_t = self.previous_timestep(t)
+
+        if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
+            model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
+        else:
+            predicted_variance = None
+
+        # 1. compute alphas, betas
+        
+
         newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
         # ns = torch.randn_like(newSample)
 
         sigma_t = 1/alphas_t -1
+
+        ## Term1 
+
+
+
+        ##
         newSample = newSample+sigma_t**0.5*torch.randn_like(newSample)
 
         # new temr calculation

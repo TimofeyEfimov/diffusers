@@ -152,7 +152,7 @@ class DDPMPipeline(DiffusionPipeline):
             #         print(image.size(), t.size(), second_noise.size())
             #         modelV_output = self.modelV(image, t, second_noise).sample
             # 2. compute previous image: x_t -> x_t-1
-            image = self.scheduler.step(model_output, t, image, generator=generator).prev_sample
+            image = self.scheduler.step(self.unet, t, image, generator=generator).prev_sample
 
         image = (image / 2 + 0.5).clamp(0, 1)
         image = image.cpu().permute(0, 2, 3, 1).numpy()
