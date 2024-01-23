@@ -398,7 +398,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
     def step(
         self,
-        model_output,
+        model_output: torch.FloatTensor,
+        model,
         timestep: int,
         sample: torch.FloatTensor,
         generator=None,
@@ -450,15 +451,42 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # My generation
         
         alphas_t = self.alphas[t]
+        
         alphas_t_prev = self.alphas[prev_t] if prev_t >= 0 else self.one
         betas_t = 1 - alphas_t
         betas_t_prev = 1 - alphas_t_prev
 
-        newSample =  (sample - 0.5*betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
-        ns = torch.randn_like(newSample)
+        ## Term 1
+
+        if t == self.num_inference_steps-1:
+            next_alpha = self.alphas[t]
+            first_term = torch.sqrt(next_alpha)
+            first_term = first_term*(sample+0.5*(1-next_alpha)*model_output/(beta_prod_t ** (0.5)))
+
+            term1 = torch.sqrt(1/alphas_t)
+            term2 = sample-0.5*betas_t*model_output/(beta_prod_t ** (0.5))
+            term3 = 0.25*betas_t*betas_t/(1-next_alpha)
+            new_score = model(first_term, t).sample  
+            term4 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha)*new_score
+            newSample = term1*(term2+term3*term4)
+        else:
+            next_alpha = self.alphas[t+1]
+            first_term = torch.sqrt(next_alpha)
+            first_term = first_term*(sample+0.5*(1-next_alpha)*model_output/(beta_prod_t ** (0.5)))
+
+            term1 = torch.sqrt(1/alphas_t)
+            term2 = sample-0.5*betas_t*model_output/(beta_prod_t ** (0.5))
+            term3 = 0.25*betas_t*betas_t/(1-next_alpha)
+            new_score = model(first_term, t+1).sample  
+            term4 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha)*new_score
+            newSample = term1*(term2+term3*term4)
+
+
+        #newSample =  (sample - 0.5*betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        #ns = torch.randn_like(newSample)
         # ns = randn_tensor(sample.size(), generator=generator).to(device=sample.device, dtype=sample.dtype)
 
-        sigma_t = 1/alphas_t -1
+        #sigma_t = 1/alphas_t -1
         #newSample = newSample+sigma_t**0.5*torch.randn_like(newSample)
 
         # new temr calculation
