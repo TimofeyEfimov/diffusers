@@ -398,7 +398,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
     def step(
         self,
-        model,
+        model_output,
         timestep: int,
         sample: torch.FloatTensor,
         generator=None,
@@ -428,8 +428,18 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         """
 
         t = timestep
+
         prev_t = self.previous_timestep(t)
+
+        if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
+            model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
+        else:
+            predicted_variance = None
+
+        # 1. compute alphas, betas
         
+
+
         alpha_prod_t = self.alphas_cumprod[t]
         alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
         beta_prod_t = 1 - alpha_prod_t
@@ -444,33 +454,73 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         betas_t = 1 - alphas_t
         betas_t_prev = 1 - alphas_t_prev
 
+        newSample =  (sample - 0.5*betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        ns = torch.randn_like(newSample)
+        # ns = randn_tensor(sample.size(), generator=generator).to(device=sample.device, dtype=sample.dtype)
 
+        sigma_t = 1/alphas_t -1
+        #newSample = newSample+sigma_t**0.5*torch.randn_like(newSample)
 
-        # Term 1
-        noise = torch.randn_like(sample)
-        second_noise = torch.randn_like(sample)
-        sample = sample + torch.sqrt(0.5*(1-alphas_t)) * second_noise
-        
-        model_output = model(sample, t).sample
-        
+        # new temr calculation
 
-        
-
-        if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
-            model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
-        else:
-            predicted_variance = None
-
-        # 1. compute alphas, betas
-        
-
-        newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
-        newSample += torch.sqrt(0.5*(1-alphas_t)) * noise
         # ns = torch.randn_like(newSample)
+        # model_output_transposed = model_output.transpose(2,3)
+        # new_term = ns+beta_prod_t*model_output*model_output_transposed*ns-modelV_output
+        # new_term2 = 0.5*betas_t/(beta_prod_t)
+        # new_term= ns-new_term*new_term2
+        #newSample = newSample+sigma_t**0.5*ns        
 
-        #sigma_t = 1/alphas_t -1
+        # t = timestep
+        # prev_t = self.previous_timestep(t)
 
-        ## Term1 
+        # alpha_prod_t = self.alphas_cumprod[t]
+        # alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
+        # beta_prod_t = 1 - alpha_prod_t
+        # beta_prod_t_prev = 1 - alpha_prod_t_prev
+        # current_alpha_t = alpha_prod_t / alpha_prod_t_prev
+        # current_beta_t = 1 - current_alpha_t
+
+        # # My generation
+        
+        # alphas_t = self.alphas[t]
+        # alphas_t_prev = self.alphas[prev_t] if prev_t >= 0 else self.one
+        # betas_t = 1 - alphas_t
+        # betas_t_prev = 1 - alphas_t_prev
+
+
+
+        # # Term 1
+        # noise = torch.randn_like(sample)
+        # #noise = randn_tensor(sample.size(), generator=generator).to(device=sample.device, dtype=sample.dtype)
+        # second_noise = torch.randn_like(sample)
+        # #second_noise = randn_tensor(sample.size(), generator=generator).to(device=sample.device, dtype=sample.dtype)
+        # sample = sample + torch.sqrt(0.5*(1-alphas_t)) * second_noise
+        
+        # model_output = model(sample, t).sample
+        
+
+        
+
+        # if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
+        #     model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
+        # else:
+        #     predicted_variance = None
+
+        # # 1. compute alphas, betas
+        
+
+        # newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        # newSample += torch.sqrt(0.5*(1-alphas_t)) * noise
+
+
+
+        # # Term 1
+        # noise = torch.randn_like(sample)
+        # noise = randn_tensor(sample.size(), generator=generator).to(device=sample.device, dtype=sample.dtype)
+        # second_noise = torch.randn_like(sample)
+        # second_noise = randn_tensor(sample.size(), generator=generator).to(device=sample.device, dtype=sample.dtype)
+        # sample = sample + torch.sqrt(0.5*(1-alphas_t)) * second_noise
+        
 
 
 
