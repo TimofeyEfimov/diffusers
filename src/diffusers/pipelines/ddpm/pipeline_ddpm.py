@@ -111,6 +111,8 @@ class DDPMPipeline(DiffusionPipeline):
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
 
+        previous_output = None 
+
         for t in self.progress_bar(self.scheduler.timesteps):
             
             # 1. predict noise model_output
@@ -152,7 +154,10 @@ class DDPMPipeline(DiffusionPipeline):
             #         print(image.size(), t.size(), second_noise.size())
             #         modelV_output = self.modelV(image, t, second_noise).sample
             # 2. compute previous image: x_t -> x_t-1
-            image = self.scheduler.step(self.unet, t, image, generator=generator).prev_sample
+            image = self.scheduler.step(model_output, self.unet, previous_output, t, image, generator=generator).prev_sample
+
+            previous_output = model_output
+            
 
         image = (image / 2 + 0.5).clamp(0, 1)
         image = image.cpu().permute(0, 2, 3, 1).numpy()

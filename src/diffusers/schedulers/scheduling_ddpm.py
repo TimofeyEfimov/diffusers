@@ -400,6 +400,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         self,
         model_output: torch.FloatTensor,
         model,
+        previous_output,
         timestep: int,
         sample: torch.FloatTensor,
         generator=None,
@@ -456,7 +457,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         betas_t = 1 - alphas_t
         betas_t_prev = 1 - alphas_t_prev
 
-        ## Term 1
+        # Term 1
 
         if t == self.num_inference_steps-1:
             next_alpha = self.alphas[t]
@@ -466,23 +467,56 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             term1 = torch.sqrt(1/alphas_t)
             term2 = sample-0.5*betas_t*model_output/(beta_prod_t ** (0.5))
             term3 = 0.25*betas_t*betas_t/(1-next_alpha)
-            new_score = model(first_term, t).sample  
+            new_score = model(first_term, t).sample  / (beta_prod_t ** (0.5))
             term4 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha)*new_score
-            newSample = term1*(term2+term3*term4)
+            newSample1 = term1*(term2+term3*term4)
         else:
             next_alpha = self.alphas[t+1]
+            beta_prod_t_plus1 = 1-self.alphas_cumprod[t+1]
             first_term = torch.sqrt(next_alpha)
             first_term = first_term*(sample+0.5*(1-next_alpha)*model_output/(beta_prod_t ** (0.5)))
 
             term1 = torch.sqrt(1/alphas_t)
             term2 = sample-0.5*betas_t*model_output/(beta_prod_t ** (0.5))
             term3 = 0.25*betas_t*betas_t/(1-next_alpha)
-            new_score = model(first_term, t+1).sample  
-            term4 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha)*new_score
-            newSample = term1*(term2+term3*term4)
+            new_score1 = model(first_term, t+1).sample / (beta_prod_t_plus1 ** (0.5))
+            term4 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha)*new_score1
+            #print('here')
+            newSample1 = term1*(term2+term3*term4)
+
+        
+        # # New Term 1
+
+        # if t == self.num_inference_steps-1:
+        #     newSample =  (sample - 0.5*betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        # else:
+        #     next_alpha = self.alphas[t+1]
+        #     beta_prod_t_plus1 = 1-self.alphas_cumprod[t+1]
+        #     first_term = torch.sqrt(next_alpha)
+        #     first_term = first_term*(sample+0.5*(1-next_alpha)*model_output/(beta_prod_t ** (0.5)))
+
+        #     term1 = torch.sqrt(1/alphas_t)
+
+        #     term2 = sample-0.5*betas_t*model_output/(beta_prod_t ** (0.5))
+        #     term3 = 0.25*betas_t*betas_t/(1-next_alpha)
+        #     new_score = previous_output/(beta_prod_t_plus1** (0.5))
+        #     term4 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha)*new_score
+        #     # print("what's up")
+        #     newSample = term1*(term2+term3*term4)
+
+        #     # Compute the Mean Squared Error (MSE) between newSample1 and newSample
+        #     mse_newSample = torch.mean(torch.pow(model(first_term, t+1).sample - previous_output, 2))
+        #     print("MSE between newSample1 and newSample:", mse_newSample)
+
+        #     # Assuming new_score1 and new_score are defined in your code and are tensors
+        #     # Compute the Mean Squared Error (MSE) between new_score1 and new_score
+        #     mse_new_score = torch.mean(torch.pow(new_score1 - new_score, 2))
+        #     print("MSE between new_score1 and new_score:", mse_new_score)
 
 
-        #newSample =  (sample - 0.5*betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        
+
+        # newSample =  (sample - 0.5*betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
         #ns = torch.randn_like(newSample)
         # ns = randn_tensor(sample.size(), generator=generator).to(device=sample.device, dtype=sample.dtype)
 
