@@ -569,6 +569,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         #     predicted_variance = None
 
         # # 1. compute alphas, betas
+
         if t>0:
             noise = torch.randn_like(sample)
             device = model_output.device
@@ -583,8 +584,6 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         sigma_t = 1/alphas_t -1
         newSample = newSample+sigma_t**0.5*noise
 
-
-
         # # Term 1
         # noise = torch.randn_like(sample)
         # noise = randn_tensor(sample.size(), generator=generator).to(device=sample.device, dtype=sample.dtype)
@@ -592,7 +591,52 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # second_noise = randn_tensor(sample.size(), generator=generator).to(device=sample.device, dtype=sample.dtype)
         # sample = sample + torch.sqrt(0.5*(1-alphas_t)) * second_noise
         
+         # Term 1
+        device = model_output.device
+        if t>0:
+            noise = torch.randn_like(sample)
+            device = model_output.device
+            noise = randn_tensor(
+                model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+            )
+            second_noise = randn_tensor(
+                model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+            )
+        else:
+            noise = 0
+            second_noise = randn_tensor(
+                model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+            )
+        #noise = torch.randn_like(sample)
+        second_noise = torch.randn_like(sample)
+        sample = sample + torch.sqrt(0.5*(1-alphas_t)) * second_noise
+        
+        model_output = model(sample, t).sample
 
+        # Print the device for 'sample' tensor
+        # print(f"Device for 'sample': {sample.device}")
+        # print(f"Device for 't': {t.device}")
+        
+        
+
+
+
+        # # Print the device for model's output
+        # print(f"Device for 'model_output': {model_output.device}")
+        
+
+        
+
+        if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
+            model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
+        else:
+            predicted_variance = None
+
+        # 1. compute alphas, betas
+        
+
+        newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        newSample += torch.sqrt(0.5*(1-alphas_t)) * noise
 
 
         ##

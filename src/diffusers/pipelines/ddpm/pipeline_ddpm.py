@@ -157,11 +157,11 @@ class DDPMPipeline(DiffusionPipeline):
             image = self.scheduler.step(model_output, self.unet, previous_output, t, image, generator=generator).prev_sample
 
             previous_output = model_output
-            print("Devices:")
-            print(f"image device: {image.device}")
-            print(f"t device: {t.device}")
-            print(f"unet device: {next(self.unet.parameters()).device}")
-            print(f"model_output device: {model_output.device}")
+            # print("Devices:")
+            # print(f"image device: {image.device}")
+            # print(f"t device: {t.device}")
+            # print(f"unet device: {next(self.unet.parameters()).device}")
+            # print(f"model_output device: {model_output.device}")
             
 
         image = (image / 2 + 0.5).clamp(0, 1)
