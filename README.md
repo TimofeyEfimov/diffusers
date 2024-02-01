@@ -1,3 +1,20 @@
+
+This code is built as extension to diffusers library with changes to scheduling_ddpm.py,
+pipeline_ddpm.py and additional file run_pipeline.py to generate images from various samplers.
+
+When you copy the code, do all of the following installations:https://huggingface.co/docs/diffusers/en/installation
+and choose Editable Install section
+
+Then create conda environment with: 
+conda create -n env_name python=3.9
+
+Determine how many GPUs you use and change num_processes in the run_pipeline.py accordingly.
+All changes to experiments you want to do is in top of pipelines.py 
+
+To run code: in src run CUDA_VISIBLE_DEVICES=0,1,2,3 accelerate launch run_pipeline.py --num_processes=4
+
+And configure GPUs and processes accordingly.
+
 <!---
 Copyright 2022 - The HuggingFace Team. All rights reserved.
 
