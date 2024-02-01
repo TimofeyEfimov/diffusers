@@ -269,6 +269,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 `num_inference_steps` must be `None`.
 
         """
+
+        # print("config is", self.config.num_train_timesteps)
         if num_inference_steps is not None and timesteps is not None:
             raise ValueError("Can only pass one of `num_inference_steps` or `custom_timesteps`.")
 
@@ -305,8 +307,10 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                     .astype(np.int64)
                 )
             elif self.config.timestep_spacing == "leading":
+                # print(self.config.num_train_timesteps, self.num_inference_steps)
                 step_ratio = self.config.num_train_timesteps // self.num_inference_steps
-                # creates integer timesteps by multiplying by ratio
+                # print("step_Ratio is", step_ratio)
+                # creates integer timestep  s by multiplying by ratio
                 # casting to int to avoid issues when num_inference_step is power of 3
                 timesteps = (np.arange(0, num_inference_steps) * step_ratio).round()[::-1].copy().astype(np.int64)
                 timesteps += self.config.steps_offset
@@ -320,7 +324,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 raise ValueError(
                     f"{self.config.timestep_spacing} is not supported. Please make sure to choose one of 'linspace', 'leading' or 'trailing'."
                 )
-
+        # print(self.config.timestep_spacing)
         self.timesteps = torch.from_numpy(timesteps).to(device)
 
     def _get_variance(self, t, predicted_variance=None, variance_type=None):
@@ -398,7 +402,10 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
     def step(
         self,
+        sampler_type,
         model_output: torch.FloatTensor,
+        model,
+        previous_output,
         timestep: int,
         sample: torch.FloatTensor,
         generator=None,
@@ -426,22 +433,109 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 tuple is returned where the first element is the sample tensor.
 
         """
-        t = timestep
+        
+        t = timestep    
+    
 
         prev_t = self.previous_timestep(t)
 
-        if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
-            model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
-        else:
-            predicted_variance = None
+        # if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
+        #     model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
+        # else:
+        #     predicted_variance = None
 
         # 1. compute alphas, betas
+        
+
+
         alpha_prod_t = self.alphas_cumprod[t]
         alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
         current_alpha_t = alpha_prod_t / alpha_prod_t_prev
         current_beta_t = 1 - current_alpha_t
+
+        # My generation
+        
+        # print(self.alphas[t])
+        alphas_t = self.alphas[t]
+
+        
+        alphas_t_prev = self.alphas[prev_t] if prev_t >= 0 else self.one
+        betas_t = 1 - alphas_t
+        betas_t_prev = 1 - alphas_t_prev
+
+        if sampler_type == "VanillaODE":
+
+            newSample =  (sample - 0.5*betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+
+        elif sampler_type == "NewODE":
+
+                    
+            if previous_output is None:
+                newSample =  (sample - 0.5*betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+            else:
+                next_alpha = self.alphas[t+1]
+                
+                beta_prod_t_plus1 = 1-self.alphas_cumprod[t+1]
+                
+        
+                term1 = torch.sqrt(1/alphas_t)
+                term2 = sample-0.5*betas_t*model_output/(beta_prod_t ** (0.5))
+                term3 = 0.25*betas_t*betas_t/(1-next_alpha)
+                new_score = previous_output/(beta_prod_t_plus1 ** (0.5))
+                term4 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha)*new_score
+
+                
+                newSample = term1*(term2+term3*term4)
+            
+        elif sampler_type == "VanillaSDE":
+                    
+            if t>0:
+                noise = torch.randn_like(sample)
+                device = model_output.device    
+            else:
+                noise = 0
+
+            newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+
+
+            sigma_t = 1/alphas_t -1
+            newSample = newSample+sigma_t**0.5*noise
+
+        elif sampler_type == "NewSDE":
+
+            device = sample.device
+            
+            if t>0:
+                noise = torch.randn_like(sample)
+                
+                second_noise = randn_tensor(
+                    sample.shape, generator=generator, device=device, dtype=sample.dtype
+                )
+            else:
+                noise = 0
+                second_noise = randn_tensor(
+                    sample.shape, generator=generator, device=device, dtype=sample.dtype
+                )
+            
+            sample = sample + torch.sqrt(0.5*(1-alphas_t)) * second_noise
+            
+            model_output = model(sample, t).sample
+
+            if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
+                model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
+            else:
+                predicted_variance = None
+
+            
+
+            newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+            newSample += torch.sqrt(0.5*(1-alphas_t)) * noise/(alphas_t ** (0.5))
+
+        else:
+            raise ValueError(f"{sampler_type} is not supported. Please make sure to choose one of 'VanillaODE', 'NewODE', 'VanillaSDE' or 'NewSDE'.")
+
 
         # 2. compute predicted original sample from predicted noise also called
         # "predicted x_0" of formula (15) from https://arxiv.org/pdf/2006.11239.pdf
@@ -474,27 +568,11 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
         pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * sample
 
-        # 6. Add noise
-        variance = 0
-        if t > 0:
-            device = model_output.device
-            variance_noise = randn_tensor(
-                model_output.shape, generator=generator, device=device, dtype=model_output.dtype
-            )
-            if self.variance_type == "fixed_small_log":
-                variance = self._get_variance(t, predicted_variance=predicted_variance) * variance_noise
-            elif self.variance_type == "learned_range":
-                variance = self._get_variance(t, predicted_variance=predicted_variance)
-                variance = torch.exp(0.5 * variance) * variance_noise
-            else:
-                variance = (self._get_variance(t, predicted_variance=predicted_variance) ** 0.5) * variance_noise
-
-        pred_prev_sample = pred_prev_sample + variance
 
         if not return_dict:
             return (pred_prev_sample,)
 
-        return DDPMSchedulerOutput(prev_sample=pred_prev_sample, pred_original_sample=pred_original_sample)
+        return DDPMSchedulerOutput(prev_sample=newSample, pred_original_sample=None)
 
     def add_noise(
         self,

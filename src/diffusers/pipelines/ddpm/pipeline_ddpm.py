@@ -45,6 +45,7 @@ class DDPMPipeline(DiffusionPipeline):
     @torch.no_grad()
     def __call__(
         self,
+        sampler_type: str,
         batch_size: int = 1,
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
         num_inference_steps: int = 1000,
@@ -88,6 +89,7 @@ class DDPMPipeline(DiffusionPipeline):
                 If `return_dict` is `True`, [`~pipelines.ImagePipelineOutput`] is returned, otherwise a `tuple` is
                 returned where the first element is a list with the generated images
         """
+        print("hi")
         # Sample gaussian noise to begin loop
         if isinstance(self.unet.config.sample_size, int):
             image_shape = (
@@ -98,23 +100,32 @@ class DDPMPipeline(DiffusionPipeline):
             )
         else:
             image_shape = (batch_size, self.unet.config.in_channels, *self.unet.config.sample_size)
+        device = self.unet.device
 
-        if self.device.type == "mps":
+        if device.type == "mps":
             # randn does not work reproducibly on mps
             image = randn_tensor(image_shape, generator=generator)
-            image = image.to(self.device)
+            image = image.to(device)
         else:
-            image = randn_tensor(image_shape, generator=generator, device=self.device)
+            image = randn_tensor(image_shape, generator=generator, device=device)
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
 
-        for t in self.progress_bar(self.scheduler.timesteps):
-            # 1. predict noise model_output
-            model_output = self.unet(image, t).sample
+        previous_output = None 
 
-            # 2. compute previous image: x_t -> x_t-1
-            image = self.scheduler.step(model_output, t, image, generator=generator).prev_sample
+        for t in self.progress_bar(self.scheduler.timesteps):
+
+            t = t.to(device=self.unet.device)
+            if sampler_type == "NewSDE":
+                model_output = None
+            else:
+                model_output = self.unet(image, t).sample
+
+            image = self.scheduler.step(sampler_type, model_output, self.unet, previous_output, t, image, generator=generator).prev_sample
+
+            previous_output = model_output
+
 
         image = (image / 2 + 0.5).clamp(0, 1)
         image = image.cpu().permute(0, 2, 3, 1).numpy()
