@@ -270,7 +270,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         """
 
-        print("config is", self.config.num_train_timesteps)
+        # print("config is", self.config.num_train_timesteps)
         if num_inference_steps is not None and timesteps is not None:
             raise ValueError("Can only pass one of `num_inference_steps` or `custom_timesteps`.")
 
@@ -307,9 +307,9 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                     .astype(np.int64)
                 )
             elif self.config.timestep_spacing == "leading":
-                print(self.config.num_train_timesteps, self.num_inference_steps)
+                # print(self.config.num_train_timesteps, self.num_inference_steps)
                 step_ratio = self.config.num_train_timesteps // self.num_inference_steps
-                print("step_Ratio is", step_ratio)
+                # print("step_Ratio is", step_ratio)
                 # creates integer timestep  s by multiplying by ratio
                 # casting to int to avoid issues when num_inference_step is power of 3
                 timesteps = (np.arange(0, num_inference_steps) * step_ratio).round()[::-1].copy().astype(np.int64)
@@ -324,7 +324,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 raise ValueError(
                     f"{self.config.timestep_spacing} is not supported. Please make sure to choose one of 'linspace', 'leading' or 'trailing'."
                 )
-        print(self.config.timestep_spacing)
+        # print(self.config.timestep_spacing)
         self.timesteps = torch.from_numpy(timesteps).to(device)
 
     def _get_variance(self, t, predicted_variance=None, variance_type=None):
@@ -456,7 +456,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         # My generation
         
-        print(self.alphas[t])
+        # print(self.alphas[t])
         alphas_t = self.alphas[t]
 
         
@@ -581,20 +581,21 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         
         
         
-        # if t>0:
-        #     noise = torch.randn_like(sample)
-        #     device = model_output.device
-        #     # noise = randn_tensor(
-        #     #     model_output.shape, generator=generator, device=device, dtype=model_output.dtype
-        #     # )
-        #     noise = torch.randn_like(sample)
-        # else:
-        #     noise = 0
+        if t>0:
+            noise = torch.randn_like(sample)
+            device = model_output.device
+            # noise = randn_tensor(
+            #     model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+            # )
+            noise = torch.randn_like(sample)
+        else:
+            noise = 0
 
-        # newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
 
-        # sigma_t = 1/alphas_t -1
-        # newSample = newSample+sigma_t**0.5*noise
+
+        sigma_t = 1/alphas_t -1
+        newSample = newSample+sigma_t**0.5*noise
 
         # # Term 1
         # noise = torch.randn_like(sample)
@@ -604,51 +605,51 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # # sample = sample + torch.sqrt(0.5*(1-alphas_t)) * second_noise
         
         # # Term 1
-        device = model_output.device
-        print(alphas_t, t)
-        if t>0:
-            noise = torch.randn_like(sample)
-            device = model_output.device
-            noise = torch.randn_like(sample)
-            second_noise = randn_tensor(
-                model_output.shape, generator=generator, device=device, dtype=model_output.dtype
-            )
-        else:
-            noise = 0
-            second_noise = randn_tensor(
-                model_output.shape, generator=generator, device=device, dtype=model_output.dtype
-            )
-        #noise = torch.randn_like(sample)
-        sample = sample + torch.sqrt(0.5*(1-alphas_t)) * second_noise
+        # device = model_output.device
+        # # print(alphas_t, t)
+        # if t>0:
+        #     noise = torch.randn_like(sample)
+        #     device = model_output.device
+        #     noise = torch.randn_like(sample)
+        #     second_noise = randn_tensor(
+        #         model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+        #     )
+        # else:
+        #     noise = 0
+        #     second_noise = randn_tensor(
+        #         model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+        #     )
+        # #noise = torch.randn_like(sample)
+        # sample = sample + torch.sqrt(0.5*(1-alphas_t)) * second_noise
         
-        print(t)
-        model_output = model(sample, t).sample
+        # # print(t)
+        # model_output = model(sample, t).sample
 
-        # # Print the device for 'sample' tensor
-        # # print(f"Device for 'sample': {sample.device}")
-        # # print(f"Device for 't': {t.device}")
+        # # # Print the device for 'sample' tensor
+        # # # print(f"Device for 'sample': {sample.device}")
+        # # # print(f"Device for 't': {t.device}")
         
         
 
 
 
-        # # # Print the device for model's output
-        # # print(f"Device for 'model_output': {model_output.device}")
+        # # # # Print the device for model's output
+        # # # print(f"Device for 'model_output': {model_output.device}")
         
        
 
         
 
-        if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
-            model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
-        else:
-            predicted_variance = None
+        # if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
+        #     model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
+        # else:
+        #     predicted_variance = None
 
-        # 1. compute alphas, betas
+        # # 1. compute alphas, betas
         
 
-        newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
-        newSample += torch.sqrt(0.5*(1-alphas_t)) * noise/(alphas_t ** (0.5))
+        # newSample =  (sample - betas_t * model_output/(beta_prod_t ** (0.5)))/(alphas_t ** (0.5))
+        # newSample += torch.sqrt(0.5*(1-alphas_t)) * noise/(alphas_t ** (0.5))
 
 
         ##

@@ -42,7 +42,7 @@ batch_size = 50
 seed1, seed2, seed3, seed4 = 0,1,2,3
 
 # Save each image in the batch
-output_dir = "/home/tefimov/diffusers/src/NewSamplers/Bedroom/1000_NewSDE700/"
+output_dir = "/home/tefimov/diffusers/src/NewSamplers/Bedroom/SDE/1000_NewSDE_700/"
 os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
 
 
@@ -98,11 +98,11 @@ batch_size = 50
 seed1, seed2, seed3, seed4 = 0,1,2,3
 
 # Save each image in the batch
-output_dir = "/home/tefimov/diffusers/src/NewSamplers/Bedroom/1000samples_NewSDE800/"
+output_dir = "/home/tefimov/diffusers/src/NewSamplers/Bedroom/sDE/1000samples_NewSDE_800/"
 os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
 
 
-num_iterations = 5*2
+num_iterations = 5
 for iteration in range(num_iterations):
     print("It is for 800")
 
@@ -154,11 +154,11 @@ batch_size = 50
 seed1, seed2, seed3, seed4 = 0,1,2,3
 
 # Save each image in the batch
-output_dir = "/home/tefimov/diffusers/src/NewSamplers/Bedroom/1000samples_NewSDE900/"
+output_dir = "/home/tefimov/diffusers/src/NewSamplers/Bedroom/SDE/1000samples_NewSDE_900/"
 os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
 
 
-num_iterations = 5*2
+num_iterations = 5
 for iteration in range(num_iterations):
     print("It is for 800")
     start_time = time.time()
@@ -209,11 +209,11 @@ batch_size = 50
 seed1, seed2, seed3, seed4 = 0,1,2,3
 
 # Save each image in the batch
-output_dir = "/home/tefimov/diffusers/src/NewSamplers/Bedroom/1000samples_NewSDE1000/"
+output_dir = "/home/tefimov/diffusers/src/NewSamplers/Bedroom/ODE/1000samples_NewSDE_1000/"
 os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
 
 
-num_iterations = 5*2
+num_iterations = 5
 for iteration in range(num_iterations):
     print("It is for 800")
     start_time = time.time()
@@ -229,6 +229,7 @@ for iteration in range(num_iterations):
     end_time = time.time()
     iteration_time = end_time - start_time
     print(f"Time for one iteration: {iteration_time} seconds")
+
 
 # device = "cuda" if torch.cuda.is_available() else "cpu"
 # model_id = "google/ddpm-ema-church-256"

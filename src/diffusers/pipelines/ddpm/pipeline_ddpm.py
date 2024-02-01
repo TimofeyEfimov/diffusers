@@ -111,13 +111,13 @@ class DDPMPipeline(DiffusionPipeline):
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
 
-        print(self.scheduler.timesteps)
+        # print(self.scheduler.timesteps)
 
         previous_output = None 
 
         for t in self.progress_bar(self.scheduler.timesteps):
 
-            print(t)
+            # print(t)
             
             # 1. predict noise model_output
             
