@@ -549,7 +549,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # second_term = (1/torch.sqrt(current_alpha_t))
         # third_term = first_term-(1-current_alpha_t)*newScore+variance*torch.sqrt((1-current_alpha_t)/2)
         # newSample = second_term*third_term    
-        newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))+noise
+        #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))
     
 
         # model_output = model(sample,st).sample
@@ -584,7 +584,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # noise_norm = np.sqrt(np.prod(sample.shape[1:]))
         # langevin_step_size = 2 * (signal_to_noise_ratio  * noise_norm / grad_norm)**2
         # sample = sample-0.5*langevin_step_size*grad
-        #newSample = (2-torch.sqrt(current_alpha_t))*sample-(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5))+variance
+        newSample = (2-torch.sqrt(current_alpha_t))*sample-(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5))+variance
 
         # newTerm = sample + 0.5*variance2
 

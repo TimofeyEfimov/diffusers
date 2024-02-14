@@ -44,7 +44,7 @@ for seed in seeds:
     print(f"After image generation for seed {seed}")
 
     # Construct the filename to include the seed and number of steps
-    file_name = f"TestImages/SD_VanillaSDE/DDPM_Test_seed_{seed}_steps_{num_inference_steps}.png"
+    file_name = f"TestImages/SD_VanillaODE/DDPM_Test_seeds_{seed}_steps_{num_inference_steps}.png"
     
     # Save the image
     image.save(file_name)
