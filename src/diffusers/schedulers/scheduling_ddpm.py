@@ -593,7 +593,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # newSample = (newTerm-(1-current_alpha_t)*newModelOutput+variance*0.5)/(current_alpha_t ** (0.5))
         if not return_dict:
             
-            return (pred_prev_sample,)
+            return (newSample,)
 
         return DDPMSchedulerOutput(prev_sample=newSample, pred_original_sample=pred_original_sample)
 
