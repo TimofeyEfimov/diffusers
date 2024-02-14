@@ -324,7 +324,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         self.timesteps = torch.from_numpy(timesteps).to(device)
 
     def _get_variance(self, t, predicted_variance=None, variance_type=None):
-        prev_t = self.previous_timestep(t)
+        prev_t, next_t = self.previous_timestep(t)
 
         alpha_prod_t = self.alphas_cumprod[t]
         alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
@@ -398,6 +398,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
     def step(
         self,
+        model,
+        previous_output,
         model_output: torch.FloatTensor,
         timestep: int,
         sample: torch.FloatTensor,
@@ -426,9 +428,11 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 tuple is returned where the first element is the sample tensor.
 
         """
+
+        
         t = timestep
 
-        prev_t = self.previous_timestep(t)
+        prev_t, next_t= self.previous_timestep(t)
 
         if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in ["learned", "learned_range"]:
             model_output, predicted_variance = torch.split(model_output, sample.shape[1], dim=1)
@@ -437,15 +441,29 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         # 1. compute alphas, betas
         alpha_prod_t = self.alphas_cumprod[t]
+        #print(t,next_t, prev_t)
+        if next_t<1000:
+            #print(next_t)
+            alpha_prod_t_next = self.alphas_cumprod[next_t] 
+        else:
+            alpha_prod_t_next = alpha_prod_t
         alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
+        beta_prod_t_next = 1 - alpha_prod_t_next
         current_alpha_t = alpha_prod_t / alpha_prod_t_prev
+        if next_t<1000:
+            next_alpha_t = alpha_prod_t_next / alpha_prod_t
+        else:
+            next_alpha_t = current_alpha_t
         current_beta_t = 1 - current_alpha_t
+        alphas = self.alphas[t]
+        betas_t = 1 - alphas
 
         # 2. compute predicted original sample from predicted noise also called
         # "predicted x_0" of formula (15) from https://arxiv.org/pdf/2006.11239.pdf
         if self.config.prediction_type == "epsilon":
+            
             pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
         elif self.config.prediction_type == "sample":
             pred_original_sample = model_output
@@ -457,13 +475,15 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 " `v_prediction`  for the DDPMScheduler."
             )
 
-        # 3. Clip or threshold "predicted x_0"
-        if self.config.thresholding:
-            pred_original_sample = self._threshold_sample(pred_original_sample)
-        elif self.config.clip_sample:
-            pred_original_sample = pred_original_sample.clamp(
-                -self.config.clip_sample_range, self.config.clip_sample_range
-            )
+        # # 3. Clip or threshold "predicted x_0"
+        # if self.config.thresholding:
+        #     print('1')
+        #     pred_original_sample = self._threshold_sample(pred_original_sample)
+        # elif self.config.clip_sample:
+        #     print("2")
+        #     pred_original_sample = pred_original_sample.clamp(
+        #         -self.config.clip_sample_range, self.config.clip_sample_range
+        #     )
 
         # 4. Compute coefficients for pred_original_sample x_0 and current sample x_t
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
@@ -475,26 +495,75 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * sample
 
         # 6. Add noise
-        variance = 0
+        variance = 0    
+        variance2 = 0
+        variance_noise = 0
+        variance_noise2 = 0
+        # print(self.variance_type)
         if t > 0:
             device = model_output.device
             variance_noise = randn_tensor(
                 model_output.shape, generator=generator, device=device, dtype=model_output.dtype
             )
+            variance_noise2 = randn_tensor(
+                model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+            )
             if self.variance_type == "fixed_small_log":
+                
                 variance = self._get_variance(t, predicted_variance=predicted_variance) * variance_noise
+                variance2 = self._get_variance(t, predicted_variance=predicted_variance) * variance_noise2
             elif self.variance_type == "learned_range":
+                
                 variance = self._get_variance(t, predicted_variance=predicted_variance)
                 variance = torch.exp(0.5 * variance) * variance_noise
-            else:
-                variance = (self._get_variance(t, predicted_variance=predicted_variance) ** 0.5) * variance_noise
 
+            else:
+                
+                variance = (self._get_variance(t, predicted_variance=predicted_variance) ** 0.5) * variance_noise
+                variance2 = (self._get_variance(t, predicted_variance=predicted_variance) ** 0.5) * variance_noise2
+        
+        device = model_output.device
+        if t == 0:
+            variance_noise2 = randn_tensor(
+                    model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+            )
+            variance2 = (self._get_variance(t, predicted_variance=predicted_variance) ** 0.5) * variance_noise2
         pred_prev_sample = pred_prev_sample + variance
 
+        
         if not return_dict:
             return (pred_prev_sample,)
+        
 
-        return DDPMSchedulerOutput(prev_sample=pred_prev_sample, pred_original_sample=pred_original_sample)
+        first_term = sample + variance2*torch.sqrt((1-current_alpha_t)/2)
+        newScore = model(first_term, t).sample/(beta_prod_t_next ** (0.5))
+        second_term = (1/torch.sqrt(current_alpha_t))
+        third_term = first_term-(1-current_alpha_t)*newScore+variance*torch.sqrt((1-current_alpha_t)/2)
+        newSample = second_term*third_term
+
+        # # model_output = model(sample,t).sample
+        # newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+        # if next_t<1000:
+        #     term1 = torch.sqrt(next_alpha_t)*(sample+0.5*(1-next_alpha_t)*model_output/(beta_prod_t ** (0.5)))
+        #     newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
+        #     term2 = torch.sqrt(1/current_alpha_t)
+        #     term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
+        #     term4 = 0.25*(1-current_alpha_t)*(1-current_alpha_t)/(1-next_alpha_t)
+        #     term5 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha_t)*newScore
+        #     newSample = term2*(term3+term4*term5)
+        #     # newSample = newSample + variance
+        # else:
+        #     newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+
+        #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+        # newTerm = sample + 0.5*variance2
+
+        # newModelOutput = model(newTerm, t).sample/(beta_prod_t ** (0.5))
+
+        # newSample = (newTerm-(1-current_alpha_t)*newModelOutput+variance*0.5)/(current_alpha_t ** (0.5))
+
+
+        return DDPMSchedulerOutput(prev_sample=newSample, pred_original_sample=pred_original_sample)
 
     def add_noise(
         self,
@@ -543,16 +612,24 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         return self.config.num_train_timesteps
 
     def previous_timestep(self, timestep):
+        
         if self.custom_timesteps:
             index = (self.timesteps == timestep).nonzero(as_tuple=True)[0][0]
             if index == self.timesteps.shape[0] - 1:
                 prev_t = torch.tensor(-1)
+                next_t = None
             else:
                 prev_t = self.timesteps[index + 1]
+                next_t = self.timesteps[index-1]
         else:
+           
             num_inference_steps = (
                 self.num_inference_steps if self.num_inference_steps else self.config.num_train_timesteps
             )
             prev_t = timestep - self.config.num_train_timesteps // num_inference_steps
+            next_t = timestep + self.config.num_train_timesteps // num_inference_steps
 
-        return prev_t
+        # print("timestep is", timestep)
+        # print("previos timestep is", prev_t)
+        # print("next step is", next_t)
+        return prev_t, next_t
