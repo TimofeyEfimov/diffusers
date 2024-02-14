@@ -398,8 +398,6 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
     def step(
         self,
-        model,
-        previous_output,
         model_output: torch.FloatTensor,
         timestep: int,
         sample: torch.FloatTensor,
@@ -429,7 +427,6 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         """
 
-        
         t = timestep
 
         prev_t, next_t= self.previous_timestep(t)
@@ -487,6 +484,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         # 4. Compute coefficients for pred_original_sample x_0 and current sample x_t
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
+        
         pred_original_sample_coeff = (alpha_prod_t_prev ** (0.5) * current_beta_t) / beta_prod_t
         current_sample_coeff = current_alpha_t ** (0.5) * beta_prod_t_prev / beta_prod_t
 
@@ -531,21 +529,33 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         pred_prev_sample = pred_prev_sample + variance
 
         
-        if not return_dict:
-            return (pred_prev_sample,)
         
+        noise = randn_tensor(
+                    model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+            )
+        
+        noise_scale = torch.sqrt(1 - current_alpha_t)
+        noise_scale = torch.sqrt((1 - alpha_prod_t_prev) / (1 - alpha_prod_t) * current_beta_t)
+
+        noise = noise * noise_scale
+
+        #print(self.variance_type)
+        #noise = torch.clamp(noise, min=1e-20)
+
+        if t == 0:
+            noise = 0
         # first_term = sample + variance2*torch.sqrt((1-current_alpha_t)/2)
         # newScore = model(first_term, t).sample/(beta_prod_t ** (0.5))
         # second_term = (1/torch.sqrt(current_alpha_t))
         # third_term = first_term-(1-current_alpha_t)*newScore+variance*torch.sqrt((1-current_alpha_t)/2)
-        # newSample = second_term*third_term
-
-        #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))+variance
+        # newSample = second_term*third_term    
+        newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))+noise
+    
 
         # model_output = model(sample,st).sample
         
         #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
-        # print(current_alpha_t, next_alpha_t)
+        ##print(current_alpha_t, next_alpha_t)
         # if next_t<1000:
         #     term1 = torch.sqrt(next_alpha_t)*(sample+0.5*(1-next_alpha_t)*model_output/(beta_prod_t ** (0.5)))
         #     newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
@@ -558,20 +568,32 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # else:
         #     newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
 
-        # DDIM: 
-        term1 = 1/(torch.sqrt(current_alpha_t))
-        term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output/(beta_prod_t ** (0.5)))
-        term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output)
-        term3 = torch.sqrt(1-alpha_prod_t_prev)*model_output
-        newSample = term1*term2+term3
+        ## DDIM: 
+        # term1 = 1/(torch.sqrt(current_alpha_t))
+        # term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output/(beta_prod_t ** (0.5)))
+        # term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output)
+        # term3 = torch.sqrt(1-alpha_prod_t_prev)*model_output
+        # newSample = term1*term2+term3
 
         #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+
+
+        # signal_to_noise_ratio = 0.16
+        # grad = model_output
+        # grad_norm = torch.norm(grad.reshape(grad.shape[0], -1), dim=-1).mean()
+        # noise_norm = np.sqrt(np.prod(sample.shape[1:]))
+        # langevin_step_size = 2 * (signal_to_noise_ratio  * noise_norm / grad_norm)**2
+        # sample = sample-0.5*langevin_step_size*grad
+        #newSample = (2-torch.sqrt(current_alpha_t))*sample-(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5))+variance
+
         # newTerm = sample + 0.5*variance2
 
         # newModelOutput = model(newTerm, t).sample/(beta_prod_t ** (0.5))
 
         # newSample = (newTerm-(1-current_alpha_t)*newModelOutput+variance*0.5)/(current_alpha_t ** (0.5))
-
+        if not return_dict:
+            
+            return (pred_prev_sample,)
 
         return DDPMSchedulerOutput(prev_sample=newSample, pred_original_sample=pred_original_sample)
 
