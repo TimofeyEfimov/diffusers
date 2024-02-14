@@ -534,15 +534,18 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         if not return_dict:
             return (pred_prev_sample,)
         
+        # first_term = sample + variance2*torch.sqrt((1-current_alpha_t)/2)
+        # newScore = model(first_term, t).sample/(beta_prod_t ** (0.5))
+        # second_term = (1/torch.sqrt(current_alpha_t))
+        # third_term = first_term-(1-current_alpha_t)*newScore+variance*torch.sqrt((1-current_alpha_t)/2)
+        # newSample = second_term*third_term
 
-        first_term = sample + variance2*torch.sqrt((1-current_alpha_t)/2)
-        newScore = model(first_term, t).sample/(beta_prod_t_next ** (0.5))
-        second_term = (1/torch.sqrt(current_alpha_t))
-        third_term = first_term-(1-current_alpha_t)*newScore+variance*torch.sqrt((1-current_alpha_t)/2)
-        newSample = second_term*third_term
+        #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))+variance
 
-        # # model_output = model(sample,t).sample
-        # newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+        # model_output = model(sample,st).sample
+        
+        #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+        # print(current_alpha_t, next_alpha_t)
         # if next_t<1000:
         #     term1 = torch.sqrt(next_alpha_t)*(sample+0.5*(1-next_alpha_t)*model_output/(beta_prod_t ** (0.5)))
         #     newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
@@ -554,6 +557,13 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         #     # newSample = newSample + variance
         # else:
         #     newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+
+        # DDIM: 
+        term1 = 1/(torch.sqrt(current_alpha_t))
+        term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output/(beta_prod_t ** (0.5)))
+        term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output)
+        term3 = torch.sqrt(1-alpha_prod_t_prev)*model_output
+        newSample = term1*term2+term3
 
         #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
         # newTerm = sample + 0.5*variance2
