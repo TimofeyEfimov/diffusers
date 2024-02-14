@@ -17,15 +17,16 @@ pipeline.scheduler = DDPMScheduler.from_config(pipeline.scheduler.config)
 # pipeline.scheduler = scheduler
 
 print("pipeline is")
-print(pipeline.scheduler, pipeline.scheduler.config)
-print(pipeline.scheduler.config)
-prompt = "Carnegie Mellon University student."
+print(pipeline)
+# print(pipeline.scheduler, pipeline.scheduler.config)
+# print(pipeline.scheduler.config)
+# prompt = "Carnegie Mellon University student."
 
-print("Before generator")
-generator = torch.Generator(device="cuda").manual_seed(8)
-print("After generator")
+# print("Before generator")
+# generator = torch.Generator(device="cuda").manual_seed(8)
+# print("After generator")
 #image = pipeline(prompt, generator=generator, num_inference_steps=1000).images[0]
-print("After image")
+# print("After image")
 
 file_name = f"TestImages/SD/DDIM_Test.png"
 #image.save(file_name)
@@ -41,10 +42,12 @@ for seed in seeds:
     
     # Generate the image with the current seed and specified number of inference steps
     image = pipeline(prompt, generator=generator, num_inference_steps=num_inference_steps).images[0]
+
+    print(pipeline.config)
     print(f"After image generation for seed {seed}")
 
     # Construct the filename to include the seed and number of steps
-    file_name = f"TestImages/SD_VanillaODE/DDPM_Test_seeds_{seed}_steps_{num_inference_steps}.png"
+    file_name = f"TestImages/SD_myDDIM/DDPM_Test_seeds_{seed}_steps_{num_inference_steps}.png"
     
     # Save the image
     image.save(file_name)

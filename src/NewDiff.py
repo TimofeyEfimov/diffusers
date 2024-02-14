@@ -1,4 +1,5 @@
 from diffusers import DDPMScheduler, UNet2DModel
+from diffusers import DiffusionPipeline
 from PIL import Image
 import torch
 import os 
@@ -6,10 +7,16 @@ import os
 scheduler = DDPMScheduler.from_pretrained("google/ddpm-ema-celebahq-256")
 model = UNet2DModel.from_pretrained("google/ddpm-ema-celebahq-256").to("cuda")
 
+
+pipeline = DiffusionPipeline.from_pretrained(
+    "runwayml/stable-diffusion-v1-5", torch_dtype=torch.float16, use_safetensors=True
+)
+
+
 scheduler.set_timesteps(15)
 # Main code to dynamically generate images for different timesteps
 
-for i in range(5, 40, 5):
+for i in range(10, 100, 10):
     scheduler.set_timesteps(i)
     sample_size = model.config.sample_size
     noise = torch.randn((1, 3, sample_size, sample_size), device="cuda")  # Replace "cpu" with "cuda" if using GPU
@@ -29,6 +36,6 @@ for i in range(5, 40, 5):
     image = image.cpu().permute(0, 2, 3, 1).numpy()[0]
     image = Image.fromarray((image * 255).round().astype("uint8"))
 
-    file_name = f"TestImages/NewSDE/NewSDE_{i}.png"
+    file_name = f"TestImages/VanillaSDE/VanillaSDE_{i}.png"
     image.save(file_name)
     print(f"Saved: {file_name}")

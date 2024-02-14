@@ -569,11 +569,11 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         #     newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
 
         ## DDIM: 
-        # term1 = 1/(torch.sqrt(current_alpha_t))
-        # term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output/(beta_prod_t ** (0.5)))
-        # term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output)
-        # term3 = torch.sqrt(1-alpha_prod_t_prev)*model_output
-        # newSample = term1*term2+term3
+        term1 = 1/(torch.sqrt(current_alpha_t))
+        term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output/(beta_prod_t ** (0.5)))
+        term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output)
+        term3 = torch.sqrt(1-alpha_prod_t_prev)*model_output
+        newSample = term1*term2+term3
 
         #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
 
@@ -584,7 +584,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # noise_norm = np.sqrt(np.prod(sample.shape[1:]))
         # langevin_step_size = 2 * (signal_to_noise_ratio  * noise_norm / grad_norm)**2
         # sample = sample-0.5*langevin_step_size*grad
-        newSample = (2-torch.sqrt(current_alpha_t))*sample-(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5))+variance
+        #newSample = (2-torch.sqrt(current_alpha_t))*sample-(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5))+variance
 
         # newTerm = sample + 0.5*variance2
 
