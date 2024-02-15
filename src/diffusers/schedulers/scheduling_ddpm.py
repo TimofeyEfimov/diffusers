@@ -398,6 +398,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
     def step(
         self,
+        A,
+        measurement,
         model,
         model_output: torch.FloatTensor,
         timestep: int,
@@ -529,6 +531,41 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             variance2 = (self._get_variance(t, predicted_variance=predicted_variance) ** 0.5) * variance_noise2
         pred_prev_sample = pred_prev_sample + variance
 
+        with torch.enable_grad():
+            
+            pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
+            #pred_original_sample = torch.tensor(pred_original_sample, requires_grad=True)
+            y = A * pred_original_sample
+            print(y.size())
+            # y = torch.tensor(y, requires_grad=True)
+
+            # mse = torch.sum(torch.sqrt((y_data - y) ** 2))
+            # mse = (y_data - y).norm(p=2)
+        
+            mse = torch.norm(measurement-y, p=2, dim=(1, 2, 3))
+            
+            mse = mse.reshape((mse.shape[0], 1, 1, 1))
+            step_size = 1/mse 
+            loss_fn = torch.nn.MSELoss()
+
+            # Compute the loss between the predicted previous sample and actual data 'y'
+            loss = loss_fn(y, measurement)
+
+            norm_grad = torch.autograd.grad(outputs=loss, inputs=sample, retain_graph=True)[0]
+
+            # Backpropagate to compute the gradient of the loss with respect to `y`
+            loss.backward()
+
+            # The gradient is now stored in `y.grad`
+            gradient = sample.grad
+            
+            #gradient = torch.cat((gradient, gradient), dim=1)
+            # print("checking")
+            # print("type of gradient is", type(gradient))
+            
+            #print(gradient.size())
+            pred_prev_sample = pred_prev_sample-step_size * gradient
+
         
         
         noise = randn_tensor(
@@ -558,7 +595,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         #     print("HERE")
         #     newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))
 
-        newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))+noise 
+        #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))+noise 
         # Vanilla ODE
         #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))
 
@@ -603,9 +640,9 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # newSample = (newTerm-(1-current_alpha_t)*newModelOutput+variance*0.5)/(current_alpha_t ** (0.5))
         if not return_dict:
             
-            return (newSample,)
+            return (pred_prev_sample,)
 
-        return DDPMSchedulerOutput(prev_sample=newSample, pred_original_sample=pred_original_sample)
+        return DDPMSchedulerOutput(prev_sample=pred_prev_sample, pred_original_sample=pred_original_sample)
 
     def add_noise(
         self,
