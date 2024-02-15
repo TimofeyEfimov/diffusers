@@ -8,15 +8,15 @@ scheduler = DDPMScheduler.from_pretrained("google/ddpm-ema-celebahq-256")
 model = UNet2DModel.from_pretrained("google/ddpm-ema-celebahq-256").to("cuda")
 
 
-pipeline = DiffusionPipeline.from_pretrained(
-    "runwayml/stable-diffusion-v1-5", torch_dtype=torch.float16, use_safetensors=True
-)
+# pipeline = DiffusionPipeline.from_pretrained(
+#     "runwayml/stable-diffusion-v1-5", torch_dtype=torch.float16, use_safetensors=True
+# )
 
 
 scheduler.set_timesteps(15)
 # Main code to dynamically generate images for different timesteps
 
-for i in range(10, 100, 10):
+for i in range(50, 500, 50):
     scheduler.set_timesteps(i)
     sample_size = model.config.sample_size
     noise = torch.randn((1, 3, sample_size, sample_size), device="cuda")  # Replace "cpu" with "cuda" if using GPU
@@ -28,7 +28,7 @@ for i in range(10, 100, 10):
         
             noisy_residual = model(input, t).sample
             
-            prev_noisy_sample = scheduler.step(model, previous_output, noisy_residual, t, input).prev_sample
+            prev_noisy_sample = scheduler.step(model, noisy_residual, t, input).prev_sample
             input = prev_noisy_sample
             previous_output = noisy_residual
 
