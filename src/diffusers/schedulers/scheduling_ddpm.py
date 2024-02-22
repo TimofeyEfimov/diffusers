@@ -576,9 +576,10 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         
         #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
         #print(current_alpha_t, next_alpha_t)
-        if next_t<1000:
+        if previous_output != None:
             term1 = torch.sqrt(next_alpha_t)*(sample+0.5*(1-next_alpha_t)*model_output/(beta_prod_t ** (0.5)))
             newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
+            newScore = previous_output/(beta_prod_t_next ** (0.5))
             term2 = torch.sqrt(1/current_alpha_t)
             term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
             term4 = 0.25*(1-current_alpha_t)*(1-current_alpha_t)/(1-next_alpha_t)
@@ -587,9 +588,10 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             # newSample = newSample + variance
         else:
             newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
-
+        #newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
+        #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
         ### NEW ODE WITH PREVIOUS:
-        # if previous_output != None:
+        # if previous_output != None:s
         #     newSample = sample/(current_alpha_t ** (0.5)) - (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
         #     newScore = 
         #     term1 = 1/(torch.sqrt(current_alpha_t))
