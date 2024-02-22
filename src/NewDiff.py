@@ -9,7 +9,8 @@ import numpy as np
 scheduler = DDPMScheduler.from_pretrained("google/ddpm-ema-celebahq-256")
 model = UNet2DModel.from_pretrained("google/ddpm-ema-celebahq-256").to("cuda")
 
-
+# Move the model to GPU
+model = model.to("cuda")
 # pipeline = DiffusionPipeline.from_pretrained(
 #     "runwayml/stable-diffusion-v1-5", torch_dtype=torch.float16, use_safetensors=True
 # )
@@ -67,14 +68,16 @@ for i in range(10, 100, 10):
     
 
     for t in scheduler.timesteps:
-        with torch.no_grad():
+        
 
-            input = torch.tensor(input, requires_grad=True)        
-            noisy_residual = model(input, t).sample
-            
-            prev_noisy_sample = scheduler.step(A,measurement, model, noisy_residual, t, input).prev_sample
-            input = prev_noisy_sample
-            previous_output = noisy_residual
+        
+        input = torch.tensor(input, requires_grad=True )
+        noisy_residual = model(input, t).sample
+        
+        prev_noisy_sample = scheduler.step(A,measurement, model, noisy_residual, t, input).prev_sample
+        #a2 = scheduler.step(A,measurement, model, noisy_residual, t, input).pred_original_sample
+        input = prev_noisy_sample
+        previous_output = noisy_residual
     
     image = (input / 2 + 0.5).clamp(0, 1)
     image = image.cpu().permute(0, 2, 3, 1).detach().numpy()[0]

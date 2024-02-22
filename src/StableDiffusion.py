@@ -14,10 +14,11 @@ pipeline = DiffusionPipeline.from_pretrained(
 
 scheduler = DDPMScheduler.from_pretrained("google/ddpm-ema-celebahq-256")
 pipeline.scheduler = DDPMScheduler.from_config(pipeline.scheduler.config)
+pipeline.scheduler.beta_schedule = "linear"
 # pipeline.scheduler = scheduler
 
 print("pipeline is")
-print(pipeline)
+#print(pipeline)
 # print(pipeline.scheduler, pipeline.scheduler.config)
 # print(pipeline.scheduler.config)
 # prompt = "Carnegie Mellon University student."
@@ -31,8 +32,8 @@ print(pipeline)
 file_name = f"TestImages/SD/DDIM_Test.png"
 #image.save(file_name)
 
-prompt = "A dog and a cat playing together."
-num_inference_steps = 50
+prompt = "Banana riding the bicycle"
+num_inference_steps = 15
 seeds = [0,1,2,3,4,5,6,7,8]  # Example seeds, you can define your own list
 
 for seed in seeds:
@@ -46,8 +47,11 @@ for seed in seeds:
     print(pipeline.config)
     print(f"After image generation for seed {seed}")
 
-    # Construct the filename to include the seed and number of steps
-    file_name = f"TestImages/SD_myDDIM/DDPM_Test_seeds_{seed}_steps_{num_inference_steps}.png"
+    # Construct the filename to include the sseed and number of steps
+    #file_name = f"TestImages/OLD_ODE_new/1order_new_seeds_{seed}_steps_{num_inference_steps}.png"
+    file_name = f"TestImages/Banana/1storder_{seed}_steps_{num_inference_steps}.png"
+
+    #file_name = f"TestImages/SD_myDDIM/myDDIM_seeds_{seed}_steps_{num_inference_steps}.png"
     
     # Save the image
     image.save(file_name)

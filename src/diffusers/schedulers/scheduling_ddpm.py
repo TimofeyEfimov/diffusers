@@ -20,6 +20,7 @@ from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
+from PIL import Image
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import BaseOutput
@@ -398,13 +399,12 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
     def step(
         self,
-        A,
-        measurement,
-        model,
         model_output: torch.FloatTensor,
         timestep: int,
         sample: torch.FloatTensor,
         generator=None,
+        model=None, 
+        previous_output=None,
         return_dict: bool = True,
     ) -> Union[DDPMSchedulerOutput, Tuple]:
         """
@@ -530,43 +530,6 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             )
             variance2 = (self._get_variance(t, predicted_variance=predicted_variance) ** 0.5) * variance_noise2
         pred_prev_sample = pred_prev_sample + variance
-
-        with torch.enable_grad():
-            
-            pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
-            #pred_original_sample = torch.tensor(pred_original_sample, requires_grad=True)
-            y = A * pred_original_sample
-            print(y.size())
-            # y = torch.tensor(y, requires_grad=True)
-
-            # mse = torch.sum(torch.sqrt((y_data - y) ** 2))
-            # mse = (y_data - y).norm(p=2)
-        
-            mse = torch.norm(measurement-y, p=2, dim=(1, 2, 3))
-            
-            mse = mse.reshape((mse.shape[0], 1, 1, 1))
-            step_size = 1/mse 
-            loss_fn = torch.nn.MSELoss()
-
-            # Compute the loss between the predicted previous sample and actual data 'y'
-            loss = loss_fn(y, measurement)
-
-            norm_grad = torch.autograd.grad(outputs=loss, inputs=sample, retain_graph=True)[0]
-
-            # Backpropagate to compute the gradient of the loss with respect to `y`
-            loss.backward()
-
-            # The gradient is now stored in `y.grad`
-            gradient = sample.grad
-            
-            #gradient = torch.cat((gradient, gradient), dim=1)
-            # print("checking")
-            # print("type of gradient is", type(gradient))
-            
-            #print(gradient.size())
-            pred_prev_sample = pred_prev_sample-step_size * gradient
-
-        
         
         noise = randn_tensor(
                     model_output.shape, generator=generator, device=device, dtype=model_output.dtype
@@ -594,43 +557,79 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # else:
         #     print("HERE")
         #     newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))
+        
+        #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)*0.5*model_output/(beta_prod_t ** (0.5)))
 
-        #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))+noise 
+        # Corrector:
+
+        #for k in range(2):
+
         # Vanilla ODE
+            
         #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))
+        #print("hi")
+
+        # new equation
+        #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-torch.sqrt(current_alpha_t))* model_output/(beta_prod_t ** (0.5)))
 
         # model_output = model(sample,st).sample
         
         #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
         #print(current_alpha_t, next_alpha_t)
-        # if next_t<1000: 
-        #     term1 = torch.sqrt(next_alpha_t)*(sample+0.5*(1-next_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-        #     newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
-        #     term2 = torch.sqrt(1/current_alpha_t)
-        #     term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-        #     term4 = 0.25*(1-current_alpha_t)*(1-current_alpha_t)/(1-next_alpha_t)
-        #     term5 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha_t)*newScore
-        #     newSample = term2*(term3+term4*term5)
-        #     # newSample = newSample + variance
-        # else:
-        #     newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+        if next_t<1000:
+            term1 = torch.sqrt(next_alpha_t)*(sample+0.5*(1-next_alpha_t)*model_output/(beta_prod_t ** (0.5)))
+            newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
+            term2 = torch.sqrt(1/current_alpha_t)
+            term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
+            term4 = 0.25*(1-current_alpha_t)*(1-current_alpha_t)/(1-next_alpha_t)
+            term5 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha_t)*newScore
+            newSample = term2*(term3+term4*term5)
+            # newSample = newSample + variance
+        else:
+            newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
 
-        ## DDIM: 
+        ### NEW ODE WITH PREVIOUS:
+        # if previous_output != None:
+        #     newSample = sample/(current_alpha_t ** (0.5)) - (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
+        #     newScore = 
+        #     term1 = 1/(torch.sqrt(current_alpha_t))
+        #     term2 = (1-current_alpha_t)**2
+        #     term3 = 4*(1-next_alpha_t)
+        #     term4 = (-model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha_t)*previous_output/(beta_prod_t_next ** (0.5)))
+        #     newSample = newSample+term1*term2*term4/term3
+        # else:
+        #     newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
+        #DDIM: 
         # term1 = 1/(torch.sqrt(current_alpha_t))
         # term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output/(beta_prod_t ** (0.5)))
         # term2 = (sample-torch.sqrt(1-alpha_prod_t)*model_output)
         # term3 = torch.sqrt(1-alpha_prod_t_prev)*model_output
         # newSample = term1*term2+term3
+            
+        
 
         #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+        #print("hi")
+            
+        #newSample = (sample - (1/(current_alpha_t ** (0.5))-1)*model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+        
 
+        #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+            
+        # RAW FORM
+        # print('k')
 
+        #newSample = sample/(current_alpha_t ** (0.5))-(1/torch.sqrt(current_alpha_t)-1)*model_output/(beta_prod_t ** (0.5))
+        #ewSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
+
+        # print(newSample == newSample1)
         # signal_to_noise_ratio = 0.16
         # grad = model_output
         # grad_norm = torch.norm(grad.reshape(grad.shape[0], -1), dim=-1).mean()
         # noise_norm = np.sqrt(np.prod(sample.shape[1:]))
         # langevin_step_size = 2 * (signal_to_noise_ratio  * noise_norm / grad_norm)**2
         # sample = sample-0.5*langevin_step_size*grad
+            
         #newSample = (2-torch.sqrt(current_alpha_t))*sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5))
 
         # newTerm = sample + 0.5*variance2
@@ -640,9 +639,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # newSample = (newTerm-(1-current_alpha_t)*newModelOutput+variance*0.5)/(current_alpha_t ** (0.5))
         if not return_dict:
             
-            return (pred_prev_sample,)
-
-        return DDPMSchedulerOutput(prev_sample=pred_prev_sample, pred_original_sample=pred_original_sample)
+            return (newSample,)
+        return DDPMSchedulerOutput(prev_sample=newSample, pred_original_sample=pred_original_sample)
 
     def add_noise(
         self,
