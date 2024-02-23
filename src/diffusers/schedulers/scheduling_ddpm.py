@@ -574,20 +574,50 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         # model_output = model(sample,st).sample
         
-        #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+        # newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
         #print(current_alpha_t, next_alpha_t)
+        # if previous_output != None:
+        #     term1 = torch.sqrt(next_alpha_t)*(sample+0.5*(1-next_alpha_t)*model_output/(beta_prod_t ** (0.5)))
+        #     #newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
+        #     newScore = previous_output/(beta_prod_t_next ** (0.5))
+        #     term2 = torch.sqrt(1/current_alpha_t)
+        #     term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
+        #     term4 = 0.25*(1-current_alpha_t)*(1-current_alpha_t)/(1-next_alpha_t)
+        #     term5 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha_t)*newScore
+        #     newSample = term2*(term3+term4*term5)
+
+        #     #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+        #     # newSample = newSample + variance
+        # else:
+        #     newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+
+
+
+        # second interpretation:
         if previous_output != None:
             term1 = torch.sqrt(next_alpha_t)*(sample+0.5*(1-next_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-            newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
+            #newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
             newScore = previous_output/(beta_prod_t_next ** (0.5))
             term2 = torch.sqrt(1/current_alpha_t)
             term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-            term4 = 0.25*(1-current_alpha_t)*(1-current_alpha_t)/(1-next_alpha_t)
-            term5 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha_t)*newScore
-            newSample = term2*(term3+term4*term5)
-            # newSample = newSample + variance
+
+
+            term4 = torch.sqrt(alpha_prod_t_prev)/(alpha_prod_t-alpha_prod_t_next)
+            term5 = alpha_prod_t/torch.sqrt(alpha_prod_t_prev)+torch.sqrt(alpha_prod_t_prev)-2*torch.sqrt(alpha_prod_t)
+            term6 = -model_output/(beta_prod_t ** (0.5))+newScore*torch.sqrt(next_alpha_t)
+            newSample = term2*term3+term4*term5*term6
+
+            # term2 = torch.sqrt(1/current_alpha_t)
+            # term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
+            # term4 = 0.25*(1-current_alpha_t)*(1-current_alpha_t)/(1-next_alpha_t)
+            # term5 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha_t)*newScore
+            # newSample = term2*(term3+term4*term5)
+
         else:
             newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
+
+
+
         #newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
         #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
         ### NEW ODE WITH PREVIOUS:
