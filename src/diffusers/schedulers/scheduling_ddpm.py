@@ -618,26 +618,27 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
 
         # NEW NEW ODE:
-        if previous_output != None:
-            newScore = previous_output
-            newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
-            term2 = torch.sqrt(1/current_alpha_t)
-            term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
+        # if previous_output != None:
+        #     newScore = previous_output
+        #     newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
+        #     term2 = torch.sqrt(1/current_alpha_t)
+        #     term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
 
-            term4 = -1/torch.arcsin(torch.sqrt(1-alpha_prod_t_prev))+torch.sqrt(-(alpha_prod_t_prev-1)*(alpha_prod_t_prev)**3*alpha_prod_t)/(alpha_prod_t_prev**2)
+        #     term4 = -1/torch.arcsin(torch.sqrt(1-alpha_prod_t_prev))+torch.sqrt(-(alpha_prod_t_prev-1)*(alpha_prod_t_prev)**3*alpha_prod_t)/(alpha_prod_t_prev**2)
 
-            term5 = 1/torch.arcsin(torch.sqrt(1-alpha_prod_t))-torch.sqrt(-(alpha_prod_t-1)*alpha_prod_t**4)/(alpha_prod_t**2)
+        #     term5 = 1/torch.arcsin(torch.sqrt(1-alpha_prod_t))-torch.sqrt(-(alpha_prod_t-1)*alpha_prod_t**4)/(alpha_prod_t**2)
 
-            new_term4 = torch.arcsin(torch.sqrt(alpha_prod_t_prev))+(alpha_prod_t*torch.sqrt(1-alpha_prod_t_prev))/torch.sqrt(alpha_prod_t_prev)
-            new_term5 = -torch.arcsin(torch.sqrt(alpha_prod_t))-(alpha_prod_t*torch.sqrt(1-alpha_prod_t))/torch.sqrt(alpha_prod_t)
-            term6 = torch.sqrt(alpha_prod_t_prev)/(alpha_prod_t-alpha_prod_t_next)
-            term7 = -model_output+newScore
-            newSample += (new_term4+new_term5)*term6*term7
+        #     new_term4 = torch.arcsin(torch.sqrt(alpha_prod_t_prev))+(alpha_prod_t*torch.sqrt(1-alpha_prod_t_prev))/torch.sqrt(alpha_prod_t_prev)
+        #     new_term5 = -torch.arcsin(torch.sqrt(alpha_prod_t))-(alpha_prod_t*torch.sqrt(1-alpha_prod_t))/torch.sqrt(alpha_prod_t)
+        #     term6 = torch.sqrt(alpha_prod_t_prev)/(alpha_prod_t-alpha_prod_t_next)
+        #     term7 = -model_output+newScore
+        #     newSample += (new_term4+new_term5)*term6*term7
 
-        else:
-            newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
+        # else:
+        #     newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
         #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
 
+        newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
         #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
 
         #newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output

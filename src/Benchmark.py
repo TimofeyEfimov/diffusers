@@ -8,18 +8,18 @@ import os
 # model = UNet2DModel.from_pretrained("google/ddpm-ema-celebahq-256").to("cuda")
 
 
-scheduler = DDPMScheduler.from_pretrained("google/ddpm-bedroom-256")
+scheduler = DDPMScheduler.from_pretrained("google/ddpm-church-256")
 #scheduler.beta_schedule = "scaled_linear"
-model = UNet2DModel.from_pretrained("google/ddpm-bedroom-256").to("cuda")
+model = UNet2DModel.from_pretrained("google/ddpm-church-256").to("cuda")
 
 model = model.to("cuda")
 
-num_timesteps = 30
+num_timesteps = 5
 scheduler.set_timesteps(num_timesteps)
 seeds = [0,1,2,3,4,5,6,7,8]  # Example seeds, you can define your own list
 
-type_model ="NewODE"
-type_dataset = "Bedroom"
+type_model ="VanillaODE"
+type_dataset = "Churches"
 # Create directory if it doesn't exist
 directory = f"NewBenchmark/{type_dataset}/{type_model}/{num_timesteps}_timesteps"
 if not os.path.exists(directory):
@@ -35,7 +35,7 @@ for seed in seeds:
         input = torch.tensor(input, requires_grad=True)
         noisy_residual = model(input, t).sample
 
-        prev_noisy_sample = scheduler.step(noisy_residual, t, input, model=model, generator=generator, previous_output=previous_output).prev_sample
+        prev_noisy_sample = scheduler.step(noisy_residual, t, input, generator=generator, previous_output=previous_output).prev_sample
         input = prev_noisy_sample
         previous_output = noisy_residual
 
