@@ -658,7 +658,6 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
             newSample += (new_term4+new_term5)*term6*term7
 
-
             NewTerm1 = (1-4*alpha_prod_t)*torch.arcsin(alpha_prod_t_prev**0.5)-(torch.sqrt(1-alpha_prod_t_prev)*(alpha_prod_t_prev+2*alpha_prod_t**2)/torch.sqrt(alpha_prod_t_prev))
             NewTerm2 = (1-4*alpha_prod_t)*torch.arcsin(alpha_prod_t**0.5)-torch.sqrt(1-alpha_prod_t)*(alpha_prod_t+2*alpha_prod_t**2)/torch.sqrt(alpha_prod_t)
             NewTerm3 = 0.5*torch.sqrt(alpha_prod_t_prev)/((alpha_prod_t-alpha_prod_t_next)**2)
