@@ -644,7 +644,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
             term2 = torch.sqrt(1/current_alpha_t)
             term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-
+            
             term4 = -1/torch.arcsin(torch.sqrt(1-alpha_prod_t_prev))+torch.sqrt(-(alpha_prod_t_prev-1)*(alpha_prod_t_prev)**3*alpha_prod_t)/(alpha_prod_t_prev**2)
 
             term5 = 1/torch.arcsin(torch.sqrt(1-alpha_prod_t))-torch.sqrt(-(alpha_prod_t-1)*alpha_prod_t**4)/(alpha_prod_t**2)
@@ -658,13 +658,14 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
             newSample += (new_term4+new_term5)*term6*term7
 
+
             NewTerm1 = (1-4*alpha_prod_t)*torch.arcsin(alpha_prod_t_prev**0.5)-(torch.sqrt(1-alpha_prod_t_prev)*(alpha_prod_t_prev+2*alpha_prod_t**2)/torch.sqrt(alpha_prod_t_prev))
             NewTerm2 = (1-4*alpha_prod_t)*torch.arcsin(alpha_prod_t**0.5)-torch.sqrt(1-alpha_prod_t)*(alpha_prod_t+2*alpha_prod_t**2)/torch.sqrt(alpha_prod_t)
             NewTerm3 = 0.5*torch.sqrt(alpha_prod_t_prev)/((alpha_prod_t-alpha_prod_t_next)**2)
             #print(newScore == two_previous_output)
             NewTerm4 = -model_output+2*newScore-two_previous_output
 
-            newSample += (NewTerm1-NewTerm2)*NewTerm3*NewTerm4
+            #newSample += (NewTerm1-NewTerm2)*NewTerm3*NewTerm4
         
         else:
             newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output

@@ -1,4 +1,4 @@
-from diffusers import DDPMScheduler, UNet2DModel, DDIMScheduler
+from diffusers import DDPMScheduler, UNet2DModel, DDIMScheduler, DPMSolverMultistepScheduler, DDPMPipeline
 from diffusers import DiffusionPipeline
 from PIL import Image
 import torch
@@ -8,18 +8,27 @@ import os
 # model = UNet2DModel.from_pretrained("google/ddpm-ema-celebahq-256").to("cuda")
 
 
-scheduler = DDPMScheduler.from_pretrained("google/ddpm-church-256")
+#scheduler = DPMScheduler.from_pretrained("google/ddpm-ema-church-256")
+scheduler = DPMSolverMultistepScheduler()
 #scheduler.beta_schedule = "scaled_linear"
-model = UNet2DModel.from_pretrained("google/ddpm-church-256").to("cuda")
+model_id = "google/ddpm-ema-church-256"
+model = UNet2DModel.from_pretrained(model_id).to("cuda")
+#scheduler = DDPMScheduler.from_pretrained(model_id)
+DPM = DDPMPipeline.from_pretrained(model_id).to("cuda")
 
 model = model.to("cuda")
 
-num_timesteps = 5
+num_timesteps = 8
 scheduler.set_timesteps(num_timesteps)
-seeds = [0,1,2,3,4,5,6,7,8]  # Example seeds, you can define your own list
 
-type_model ="VanillaODE"
-type_dataset = "Churches"
+i = 20  # This would be provided dynamically in the actual use case.
+step = 1  # Assuming step is 1 for now, but it can be any positive integer.
+
+# Generate seeds using a list comprehension
+seeds = [x for x in range(0, i, step)]  # Example seeds, you can define your own list
+
+type_model ="DPMSolver2"
+type_dataset = "ChurchesEMA"
 # Create directory if it doesn't exist
 directory = f"NewBenchmark/{type_dataset}/{type_model}/{num_timesteps}_timesteps"
 if not os.path.exists(directory):
@@ -27,15 +36,24 @@ if not os.path.exists(directory):
 
 for seed in seeds:
     generator = torch.Generator(device="cuda").manual_seed(seed)
+    print(generator)
     sample_size = model.config.sample_size
     noise = torch.randn((1, 3, sample_size, sample_size), generator=generator, device="cuda")  # Replace "cpu" with "cuda" if using GPU
     input = noise
     previous_output = None
-    for t in scheduler.timesteps:
-        input = torch.tensor(input, requires_grad=True)
-        noisy_residual = model(input, t).sample
+    two_previous_output = None 
 
-        prev_noisy_sample = scheduler.step(noisy_residual, t, input, generator=generator, previous_output=previous_output).prev_sample
+    # print(scheduler)
+
+    for t in scheduler.timesteps:
+        
+        #input = torch.tensor(input, requires_grad=True)
+        noisy_residual = model(input, t).sample
+        
+        #prev_noisy_sample = scheduler.step(noisy_residual, t, input, generator=generator, previous_output=previous_output, two_previous_output=two_previous_output).prev_sample
+        prev_noisy_sample = scheduler.step(noisy_residual,t, input).prev_sample
+        
+        two_previous_output = previous_output
         input = prev_noisy_sample
         previous_output = noisy_residual
 
