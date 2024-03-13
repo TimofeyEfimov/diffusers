@@ -505,15 +505,18 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         variance_noise = 0
         variance_noise2 = 0
         # print(self.variance_type)
-        if t > 0:
+        
+        if t >0:
             device = model_output.device
             variance_noise = randn_tensor(
                 model_output.shape, generator=generator, device=device, dtype=model_output.dtype
             )
             
             variance_noise2 = randn_tensor(
-                model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+                model_output.shape, device=device, dtype=model_output.dtype
             )
+
+            #print(torch.sum(variance_noise), torch.sum(variance_noise2))
             if self.variance_type == "fixed_small_log":
                 
                 variance = self._get_variance(t, predicted_variance=predicted_variance) * variance_noise
@@ -546,7 +549,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         noise = noise * noise_scale
 
-        #print(self.variance_type)
+        #print(self.variance_type)s
         #noise = torch.clamp(noise, min=1e-20)
 
         if t == 0:
@@ -555,9 +558,14 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         if type_model == "DDPM":
             newSample = torch.sqrt(1/current_alpha_t)*(sample-(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))+variance
         if type_model == "NEW_DDPM":
-            newPoint = sample+(1/math.sqrt(2))*variance2
+            
+            newPoint = sample+torch.sqrt(current_alpha_t)*(1/math.sqrt(2))*variance2
             newScore = model(newPoint, t).sample
+            
+            if t == 0:  
+                variance = 0
             newSample = torch.sqrt(1/current_alpha_t)*(newPoint-(1-current_alpha_t)*newScore/(beta_prod_t ** (0.5)))+(1/math.sqrt(2))*variance
+
         if type_model == "DDIM_DDPM":
             
             pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
