@@ -531,7 +531,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                     model_output.shape, generator=generator, device=device, dtype=model_output.dtype
             )
             variance2 = (self._get_variance(t, predicted_variance=predicted_variance) ** 0.5) * variance_noise2
-        pred_prev_sample = pred_prev_sample + variance
+        #pred_prev_sample = pred_prev_sample + variance
         
         noise = randn_tensor(
                     model_output.shape, generator=generator, device=device, dtype=model_output.dtype
@@ -547,110 +547,33 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         if t == 0:
             noise = 0
-        #first_term = sample + variance2*torch.sqrt((1-current_alpha_t)/2)
-        # newScore = model(first_term, t).sample/(beta_prod_t ** (0.5))
-        # second_term = (1/torch.sqrt(current_alpha_t))
-        # third_term = first_term-(1-current_alpha_t)*newScore+variance*torch.sqrt((1-current_alpha_t)/2)
-        # newSample = second_term*third_term    
-            
-        # Vanilla SDE
-        # if t>500:
-        #     newSample = (1/torch.sqrt(current_alpha_t)) * (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))
-        # else:
-        #     print("HERE")
-        #     newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))
-        
-        #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-current_alpha_t)*0.5*model_output/(beta_prod_t ** (0.5)))
+        if type_model == "DDPM":
+            noise = randn_tensor(
+                    model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+            )
+            if t == 0:
+                noise = 0
+            #newSample = 1/torch.sqrt(current_alpha_t)*(sample-(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5))+torch.sqrt(1-current_alpha_t)*noise)
 
-        # Corrector:
+            term1 = torch.sqrt(alpha_prod_t_prev)*(sample-torch.sqrt(1-alpha_prod_t)*model_output)/torch.sqrt(alpha_prod_t)
+            term2 = torch.sqrt(1-alpha_prod_t_prev-(1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*model_output
+            term3 = torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise
 
-        #for k in range(2):
-
-        # Vanilla ODE
-            
-        #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))
-        #print("hi")
-
-        # new equation
-        #newSample = (1/torch.sqrt(current_alpha_t)) * (sample - (1-torch.sqrt(current_alpha_t))* model_output/(beta_prod_t ** (0.5)))
-
-        # model_output = model(sample,st).sample
-        
-        # newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
-        #print(current_alpha_t, next_alpha_t)
-        # if previous_output != None:
-        #     term1 = torch.sqrt(next_alpha_t)*(sample+0.5*(1-next_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-        #     #newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
-        #     newScore = previous_output/(beta_prod_t_next ** (0.5))
-        #     term2 = torch.sqrt(1/current_alpha_t)
-        #     term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-        #     term4 = 0.25*(1-current_alpha_t)*(1-current_alpha_t)/(1-next_alpha_t)
-        #     term5 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha_t)*newScore
-        #     newSample = term2*(term3+term4*term5)
-
-        #     #newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
-        #     # newSample = newSample + variance
-        # else:
-        #     newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
-
-
-
-        # # Old Vanilla ODE simple, but new discretization without taylor errors. Still now bringing score thing inside integral
-        # if previous_output != None:
-        #     term1 = torch.sqrt(next_alpha_t)*(sample+0.5*(1-next_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-        #     #newScore = model(term1, next_t).sample/(beta_prod_t_next ** (0.5))
-        #     newScore = previous_output/(beta_prod_t_next ** (0.5))
-        #     term2 = torch.sqrt(1/current_alpha_t)
-        #     term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-
-
-        #     term4 = torch.sqrt(alpha_prod_t_prev)/(alpha_prod_t-alpha_prod_t_next)
-        #     term5 = alpha_prod_t/torch.sqrt(alpha_prod_t_prev)+torch.sqrt(alpha_prod_t_prev)-2*torch.sqrt(alpha_prod_t)
-        #     term6 = -model_output/(beta_prod_t ** (0.5))+newScore*torch.sqrt(next_alpha_t)
-        #     newSample = term2*term3+term4*term5*term6
-
-        #     # term2 = torch.sqrt(1/current_alpha_t)
-        #     # term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-        #     # term4 = 0.25*(1-current_alpha_t)*(1-current_alpha_t)/(1-next_alpha_t)
-        #     # term5 = -model_output/(beta_prod_t ** (0.5))+torch.sqrt(next_alpha_t)*newScore
-        #     # newSample = term2*(term3+term4*term5)
-
-        # else:
-        #     newSample =  (sample - 0.5*(1-current_alpha_t)* model_output/(beta_prod_t ** (0.5)))/(current_alpha_t ** (0.5))
-
-
-        # # NEW NEW ODE:
-        # if previous_output != None:
-        #     newScore = previous_output
-        #     newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
-        #     term2 = torch.sqrt(1/current_alpha_t)
-        #     term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
-
-        #     term4 = -1/torch.arcsin(torch.sqrt(1-alpha_prod_t_prev))+torch.sqrt(-(alpha_prod_t_prev-1)*(alpha_prod_t_prev)**3*alpha_prod_t)/(alpha_prod_t_prev**2)
-
-        #     term5 = 1/torch.arcsin(torch.sqrt(1-alpha_prod_t))-torch.sqrt(-(alpha_prod_t-1)*alpha_prod_t**4)/(alpha_prod_t**2)
-
-        #     new_term4 = torch.arcsin(torch.sqrt(alpha_prod_t_prev))+(alpha_prod_t*torch.sqrt(1-alpha_prod_t_prev))/torch.sqrt(alpha_prod_t_prev)
-        #     new_term5 = -torch.arcsin(torch.sqrt(alpha_prod_t))-(alpha_prod_t*torch.sqrt(1-alpha_prod_t))/torch.sqrt(alpha_prod_t)
-        #     term6 = torch.sqrt(alpha_prod_t_prev)/(alpha_prod_t-alpha_prod_t_next)
-        #     term7 = -model_output+newScore
-        #     newSample += (new_term4+new_term5)*term6*term7
-
-        # else:
-        #     newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
-        
+            newSample = term1+term2+term3
         if type_model == "VanillaODE":
             newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
         elif type_model == "NewODE_SI":
+            
             if previous_output != None:
+                
                 newScore = previous_output
                 newSample = sample/(current_alpha_t ** (0.5)) + (torch.sqrt(1-alpha_prod_t_prev)-torch.sqrt((1-alpha_prod_t)/current_alpha_t))*model_output
-                term2 = torch.sqrt(1/current_alpha_t)
-                term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
+                # term2 = torch.sqrt(1/current_alpha_t)
+                # term3 = (sample-0.5*(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))
                 
-                term4 = -1/torch.arcsin(torch.sqrt(1-alpha_prod_t_prev))+torch.sqrt(-(alpha_prod_t_prev-1)*(alpha_prod_t_prev)**3*alpha_prod_t)/(alpha_prod_t_prev**2)
+                # term4 = -1/torch.arcsin(torch.sqrt(1-alpha_prod_t_prev))+torch.sqrt(-(alpha_prod_t_prev-1)*(alpha_prod_t_prev)**3*alpha_prod_t)/(alpha_prod_t_prev**2)
 
-                term5 = 1/torch.arcsin(torch.sqrt(1-alpha_prod_t))-torch.sqrt(-(alpha_prod_t-1)*alpha_prod_t**4)/(alpha_prod_t**2)
+                # term5 = 1/torch.arcsin(torch.sqrt(1-alpha_prod_t))-torch.sqrt(-(alpha_prod_t-1)*alpha_prod_t**4)/(alpha_prod_t**2)
 
                 new_term4 = torch.arcsin(torch.sqrt(alpha_prod_t_prev))+(alpha_prod_t*torch.sqrt(1-alpha_prod_t_prev))/torch.sqrt(alpha_prod_t_prev)
                 new_term5 = -torch.arcsin(torch.sqrt(alpha_prod_t))-(alpha_prod_t*torch.sqrt(1-alpha_prod_t))/torch.sqrt(alpha_prod_t)
