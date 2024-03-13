@@ -548,6 +548,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         if t == 0:
             noise = 0
+        
         if type_model == "DDPM":
             noise = randn_tensor(
                     model_output.shape, generator=generator, device=device, dtype=model_output.dtype
@@ -558,8 +559,10 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
             term1 = torch.sqrt(alpha_prod_t_prev)*(sample-torch.sqrt(1-alpha_prod_t)*model_output)/torch.sqrt(alpha_prod_t)
             term2 = torch.sqrt(1-alpha_prod_t_prev-(1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*model_output
+            # new_scale = 1-current_alpha_t
+            # term2 = torch.sqrt(1-alpha_prod_t_prev-new_scale)*model_output
             term3 = torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise
-
+            #term3 = torch.sqrt(new_scale)*noise
             newSample = term1+term2+term3
         if type_model == "NewDDPM":
             noise = randn_tensor(
@@ -572,13 +575,13 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 )
             if t == 0:
                 noise2 = 0
-            newPoint = sample+0.5*torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise
+            newPoint = sample+torch.sqrt(current_alpha_t)*(1/math.sqrt(2))*torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise
             #print(t,(t+previous_t)/2, previous_t)
             newScore = model(newPoint, (t+previous_t)/2).sample
             
             term1 = torch.sqrt(alpha_prod_t_prev)*(sample-torch.sqrt(1-alpha_prod_t)*newScore)/torch.sqrt(alpha_prod_t)
             term2 = torch.sqrt(1-alpha_prod_t_prev-(1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*newScore
-            term3 = 0.5*torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise2
+            term3 = (1/math.sqrt(2))*torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise2
 
             newSample = term1+term2+term3
         if type_model == "VanillaODE":
