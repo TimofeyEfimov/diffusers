@@ -552,6 +552,12 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         if t == 0:
             noise = 0
         
+        if type_model == "DDPM":
+            newSample = torch.sqrt(1/current_alpha_t)*(sample-(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5)))+variance
+        if type_model == "NEW_DDPM":
+            newPoint = sample+(1/math.sqrt(2))*variance2
+            newScore = model(newPoint, t).sample
+            newSample = torch.sqrt(1/current_alpha_t)*(newPoint-(1-current_alpha_t)*newScore/(beta_prod_t ** (0.5)))+(1/math.sqrt(2))*variance
         if type_model == "DDIM_DDPM":
             
             pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
@@ -579,7 +585,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             pred_original_sample = (newPoint - beta_prod_t ** (0.5) * newScore) / alpha_prod_t ** (0.5)
             pred_original_sample_coeff = (alpha_prod_t_prev ** (0.5) * current_beta_t) / beta_prod_t
             current_sample_coeff = current_alpha_t ** (0.5) * beta_prod_t_prev / beta_prod_t
-            
+
             pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * newPoint
             
             newSample = pred_prev_sample+(1/math.sqrt(2))*variance
