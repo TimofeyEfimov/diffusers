@@ -549,21 +549,18 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         if t == 0:
             noise = 0
         
-        if type_model == "DDPM":
-            noise = randn_tensor(
-                    model_output.shape, generator=generator, device=device, dtype=model_output.dtype
-            )
-            if t == 0:
-                noise = 0
-            #newSample = 1/torch.sqrt(current_alpha_t)*(sample-(1-current_alpha_t)*model_output/(beta_prod_t ** (0.5))+torch.sqrt(1-current_alpha_t)*noise)
+        if type_model == "SecondNewDDPM":
+            if t == 0: 
+                variance2 = 0 
+            pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
+            pred_original_sample_coeff = (alpha_prod_t_prev ** (0.5) * current_beta_t) / beta_prod_t
+            current_sample_coeff = current_alpha_t ** (0.5) * beta_prod_t_prev / beta_prod_t
 
-            term1 = torch.sqrt(alpha_prod_t_prev)*(sample-torch.sqrt(1-alpha_prod_t)*model_output)/torch.sqrt(alpha_prod_t)
-            term2 = torch.sqrt(1-alpha_prod_t_prev-(1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*model_output
-            # new_scale = 1-current_alpha_t
-            # term2 = torch.sqrt(1-alpha_prod_t_prev-new_scale)*model_output
-            term3 = torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise
-            #term3 = torch.sqrt(new_scale)*noise
-            newSample = term1+term2+term3
+            
+            pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * sample
+
+            newSample = pred_prev_sample+variance2
+
         if type_model == "NewDDPM":
             noise = randn_tensor(
                      model_output.shape, generator=generator, device=device, dtype=model_output.dtype
@@ -575,12 +572,13 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 )
             if t == 0:
                 noise2 = 0
+            
             newPoint = sample+torch.sqrt(current_alpha_t)*(1/math.sqrt(2))*torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise
             #print(t,(t+previous_t)/2, previous_t)
+            #newScore = model(newPoint, t+(1/math.sqrt(2))*(previous_t-t)).sample
             newScore = model(newPoint, t).sample
-            
-            term1 = torch.sqrt(alpha_prod_t_prev)*(sample-torch.sqrt(1-alpha_prod_t)*newScore)/torch.sqrt(alpha_prod_t)
-            term2 = torch.sqrt(1-alpha_prod_t_prev-(1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*newScore
+            term1 = torch.sqrt(alpha_prod_t_prev)*(newPoint-torch.sqrt(1-alpha_prod_t)*newScore)/torch.sqrt(alpha_prod_t)
+            term2 = torch.sqrt(1-alpha_prod_t_prev-(1/math.sqrt(2))*(1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*newScore
             term3 = (1/math.sqrt(2))*torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise2
 
             newSample = term1+term2+term3
