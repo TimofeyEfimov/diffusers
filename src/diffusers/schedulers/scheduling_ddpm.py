@@ -563,17 +563,19 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             newSample = term1+term2+term3
         if type_model == "NewDDPM":
             noise = randn_tensor(
-                        model_output.shape, generator=generator, device=device, dtype=model_output.dtype
+                     model_output.shape, generator=generator, device=device, dtype=model_output.dtype
                 )
-            if t == 0:
-                noise = 0
+            # if t == 0:
+            #     noise = 0
             noise2= randn_tensor(
                         model_output.shape, device=device, dtype=model_output.dtype
                 )
             if t == 0:
                 noise2 = 0
             newPoint = sample+0.5*torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise
-            newScore = model(newPoint, t).sample
+            #print(t,(t+previous_t)/2, previous_t)
+            newScore = model(newPoint, (t+previous_t)/2).sample
+            
             term1 = torch.sqrt(alpha_prod_t_prev)*(sample-torch.sqrt(1-alpha_prod_t)*newScore)/torch.sqrt(alpha_prod_t)
             term2 = torch.sqrt(1-alpha_prod_t_prev-(1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*newScore
             term3 = 0.5*torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise2
