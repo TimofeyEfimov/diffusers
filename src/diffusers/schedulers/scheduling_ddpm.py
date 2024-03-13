@@ -577,7 +577,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 noise2 = 0
             newPoint = sample+torch.sqrt(current_alpha_t)*(1/math.sqrt(2))*torch.sqrt((1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*noise
             #print(t,(t+previous_t)/2, previous_t)
-            newScore = model(newPoint, (t+previous_t)/2).sample
+            newScore = model(newPoint, t).sample
             
             term1 = torch.sqrt(alpha_prod_t_prev)*(sample-torch.sqrt(1-alpha_prod_t)*newScore)/torch.sqrt(alpha_prod_t)
             term2 = torch.sqrt(1-alpha_prod_t_prev-(1-alpha_prod_t_prev)/(1-alpha_prod_t)*(1-current_alpha_t))*newScore
